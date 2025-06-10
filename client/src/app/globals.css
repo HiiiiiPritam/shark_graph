@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+.node-container-type {
+  --xy-node-background: #87ceeb; /* Sky Blue */
+  --xy-node-color: white;
+  border: 1px solid #4682b4;
+}
+
+.node-router-type {
+  --xy-node-background: #ffd700; /* Gold */
+  --xy-node-color: #333;
+  border: 1px solid #daa520;
+}

@@ -1,0 +1,33 @@
+client/
+├── components/             # Reusable UI pieces
+│   ├── NetworkForm.tsx
+│   ├── NetworkList.tsx
+│   ├── ContainerForm.tsx
+│   ├── ContainerList.tsx
+│   └── PingForm.tsx
+│
+├── hooks/                  # Custom React hooks (e.g. useFetch, useSocket)
+│   └── useFetch.ts
+│
+├── lib/                    # Shared utilities (e.g. API client)
+│   └── api.ts
+│
+├── pages/                  # “Pages” map to routes
+│   ├── api/                # Next.js API routes (optional; we’re using Express separately)
+│   ├── index.tsx           # GET /
+│   ├── networks.tsx        # GET /networks
+│   ├── containers.tsx      # GET /containers
+│   └── ping.tsx            # GET /ping
+│
+├── public/                 # Static assets (favicon, images)
+│   └── favicon.ico
+│
+├── styles/                 # Global & component-level CSS/modules
+│   ├── globals.css
+│   └── NetworkForm.module.css
+│
+├── .eslintrc.js            # (optional) linting rules
+├── next.config.js          # Next.js config
+├── package.json
+└── tsconfig.json           # (if using TypeScript)
+

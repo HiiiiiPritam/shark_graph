@@ -8,10 +8,15 @@ router.post('/', async (req, res) => {
   const { sourceId, targetIp } = req.body;
 
   try {
-    const container = docker.getContainer(sourceId);
+    const targetContainer = docker.getContainer(targetIp);
+    const inspectData = await targetContainer.inspect();
 
-    const exec = await container.exec({
-      Cmd: ['ping', '-c', '3', targetIp],
+    // Use container name (if in same user-defined network)
+    const targetName = inspectData.Name.replace('/', ''); // remove leading slash
+
+    const sourceContainer = docker.getContainer(sourceId);
+    const exec = await sourceContainer.exec({
+      Cmd: ['ping', '-c', '3', targetName],
       AttachStdout: true,
       AttachStderr: true,
     });

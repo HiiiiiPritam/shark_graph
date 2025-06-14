@@ -45,4 +45,64 @@ router.post('/connect', async (req, res) => {
   }
 });
 
+// server/routes/networks.js
+router.post('/disconnect', async (req, res) => {
+  const { containerId, networkId } = req.body;
+
+  try {
+    const network = docker.getNetwork(networkId);
+    const data = await network.inspect();
+
+    console.log("Network containers:", data.Containers);
+    console.log("Requested to disconnect container:", containerId);
+    await new Promise(r => setTimeout(r, 100));
+    if (!data.Containers || !data.Containers[containerId]) {
+      return res.status(200).json({ message: 'Already disconnected or not part of network' });
+    }
+    await network.disconnect({ Container: containerId, Force: true });
+    res.json({ message: 'Disconnected successfully' });
+  } catch (err) {
+    if (err.message.includes("is not connected to network")) {
+    console.warn(`Container ${containerId} already disconnected from network ${networkId}`);
+  } else {
+    throw err;
+  }
+  }
+});
+
+
+// DELETE /networks/:id
+router.delete('/:id', async (req, res) => {
+  const networkId = req.params.id;
+
+  try {
+    const network = docker.getNetwork(networkId);
+
+    // Step 1: Inspect network to find connected containers
+    // const data = await network.inspect();
+    // const connectedContainers = data.Containers;
+    // console.log(connectedContainers);
+    
+    // if (connectedContainers) {
+    //   // Step 2: Disconnect all containers from the network
+    //   for (const containerId of Object.keys(connectedContainers)) {
+    //     //check if the conatiner is not connected then dont disconnect
+    //     if (!connectedContainers[containerId]) {
+    //       continue;
+    //     }
+    //     await network.disconnect({ Container: containerId, Force: true });
+    //   }
+    // }
+
+    // Step 3: Remove the network
+    await network.remove();
+    res.json({ message: 'Network deleted successfully' });
+
+  } catch (err) {
+    console.error('Error deleting network:', err);
+    res.status(500).json({ error: 'Failed to delete network' });
+  }
+});
+
+
 export default router;

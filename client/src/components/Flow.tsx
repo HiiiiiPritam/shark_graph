@@ -24,7 +24,7 @@ import {
   BASE_URL,
 } from '../lib/api';
 
-let id = 3;
+let id = 1;
 const getId = () => `${id++}`;
 
 export default function Flow() {
@@ -37,27 +37,123 @@ export default function Flow() {
 
 
   const onNodesChange = useCallback(
-    (changes: NodeChange[]) =>
-      setNodes((nds) => applyNodeChanges(changes, nds)),
-    []
-  );
+  async (changes: NodeChange[]) => {
+    for (const change of changes) {
+      if (change.type === 'remove') {
+        const nodeId = change.id;
+
+        if (containers[nodeId]) {
+          // It's a container node
+          const containerId = containers[nodeId];
+
+          //////////////////// May need to review this ///////////////////////////////////////////////////////////////////////
+          // Disconnect from each network it's connected to
+          // const relatedEdges = edges.filter(e => e.source === nodeId || e.target === nodeId);
+          // for (const edge of relatedEdges) {
+          //   const networkNodeId = edge.source === nodeId ? edge.target : edge.source;
+          //   const networkId = networks[networkNodeId];
+          //   if (networkId) {
+          //     await axios.post(`${BASE_URL}/networks/disconnect`, {
+          //       containerId,
+          //       networkId,
+          //     });
+          //   }
+          // }
+
+          // Remove from map
+          setContainers(prev => {
+            const copy = { ...prev };
+            delete copy[nodeId];
+            return copy;
+          });
+          
+          setNodes(nds => applyNodeChanges(changes, nds));
+          // Delete the container
+          await axios.delete(`${BASE_URL}/containers/${containerId}`);
+
+          return
+        } else if (networks[nodeId]) {
+          // It's a network/router node
+          const networkId = networks[nodeId];
+
+          //Disconnect any container connected to this network
+          const relatedEdges = edges.filter(e => e.source === nodeId || e.target === nodeId);
+          for (const edge of relatedEdges) {
+            const containerNodeId = edge.source === nodeId ? edge.target : edge.source;
+            const containerId = containers[containerNodeId];
+            if (containerId) {
+              await axios.post(`${BASE_URL}/networks/disconnect`, {
+                containerId,
+                networkId,
+              });
+            }
+          }
+
+          setNodes(nds => applyNodeChanges(changes, nds));
+          // Delete the network
+          const resp= await axios.delete(`${BASE_URL}/networks/${networkId}`);
+          if(resp.status == 500) return
+          //else 
+          // Remove from map
+          setNetworks(prev => {
+            const copy = { ...prev };
+            delete copy[nodeId];
+            return copy;
+          });
+
+          return
+        }
+
+        // Remove related edges
+        setEdges(prev => prev.filter(e => e.source !== nodeId && e.target !== nodeId));
+
+      }
+    }
+    // Apply remaining changes to nodes
+    setNodes(nds => applyNodeChanges(changes, nds));
+  },
+  [containers, networks, edges]
+);
+
 
   const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) =>
-      setEdges((eds) => applyEdgeChanges(changes, eds)),
-    []
+    async (changes: EdgeChange[]) => {
+      for (const change of changes) {
+        if (change.type === 'remove') {
+          const edge = edges.find((e) => e.id === change.id);
+          if (edge) {
+            const containerId = containers[edge.source];
+            const networkId = networks[edge.target];
+
+            if (containerId && networkId) {
+              try {
+                await axios.post(`${BASE_URL}/networks/disconnect`, {
+                  containerId,
+                  networkId,
+                });
+              } catch (err) {
+                console.error('Failed to disconnect container:', err);
+              }
+            }
+          }
+        }
+      }
+      setEdges((eds) => applyEdgeChanges(changes, eds));
+      //console.log(edges, networks);
+    },
+    [edges, containers, networks]
   );
 
   const onConnect = useCallback(
     async (connection: Connection) => {
-      const sourceDockerId = containers[connection.source];
-      const targetDockerId = networks[connection.target];
-
+      const sourceDockerId = containers[connection.source] || containers[connection.target];
+      const targetDockerId = networks[connection.target] || networks[connection.source];
+      console.log(connection.source, connection.target, sourceDockerId, targetDockerId);
       if (sourceDockerId && targetDockerId) {
         await connectToNetwork(sourceDockerId, targetDockerId);
+        setEdges((eds) => addEdge({ ...connection, type: 'step' }, eds));
       }
 
-      setEdges((eds) => addEdge({ ...connection, type: 'step' }, eds));
     },
     [containers, networks]
   );
@@ -78,7 +174,7 @@ export default function Flow() {
         data: { label: `🟦 Node ${nodeId}` },
         position: { x: Math.random() * 400, y: Math.random() * 300 },
         type: 'default',
-        style: { background: '#FFC0CB', color: '#333' },
+        style: { background: '#FFC0CB', color: '#333', border:"white" },
       },
     ]);
   };
@@ -99,7 +195,7 @@ export default function Flow() {
         data: { label: `🟨 Router ${nodeId}` },
         position: { x: Math.random() * 400, y: Math.random() * 300 },
         type: 'default',
-        style: { background: '#ADD8E6', color: '#333' },
+        style: { background: '#ADD8E6', color: '#333', border:"white"  },
       },
     ]);
   };
@@ -120,17 +216,12 @@ export default function Flow() {
         setPingSource(null);
         return;
       }
-
-      //console.log(sourceContainerId,"//////////////////",targetContainerId);
       
 
       try {
-        const res = await axios.get(`${BASE_URL}/containers/${targetContainerId}`);
-        console.log(res.data);
-        const targetIp = res.data.IPAddress;
-        console.log(targetIp);
+        console.log(targetContainerId);
       
-        const result = await pingContainer(sourceContainerId, targetIp);
+        const result = await pingContainer(sourceContainerId, targetContainerId);
         console.log(result);
 
         alert(`✅ Ping Result:\n${result.output}`);
@@ -144,7 +235,7 @@ export default function Flow() {
 
 
   return (
-    <div className="w-full h-screen flex flex-col items-start p-4">
+    <div className="w-full bg-black h-screen flex flex-col items-start p-4">
       <div className="mb-4 space-x-2">
         <button
           className="px-4 py-2 bg-blue-600 text-white rounded"

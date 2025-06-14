@@ -52,4 +52,19 @@ const ip = networks[networkName].IPAddress;
   res.json({ IPAddress: ip });
 });
 
+// DELETE /containers/:id
+router.delete('/:id', async (req, res) => {
+  try {
+    const container = docker.getContainer(req.params.id);
+    await container.stop().catch(() => {}); // ignore error if already stopped
+    await container.remove({ force: true });
+
+    res.json({ message: 'Container deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting container:', err);
+    res.status(500).json({ error: 'Failed to delete container' });
+  }
+});
+
+
 export default router;

@@ -22,6 +22,7 @@ import {
   connectToNetwork,
   pingContainer,
   BASE_URL,
+  createBridgeRouter,
 } from '../lib/api';
 
 let id = 1;
@@ -73,7 +74,7 @@ export default function Flow() {
 
           return
         } else if (networks[nodeId]) {
-          // It's a network/router node
+          // It's a networks/router node
           const networkId = networks[nodeId];
 
           //Disconnect any container connected to this network
@@ -120,26 +121,58 @@ export default function Flow() {
     async (changes: EdgeChange[]) => {
       for (const change of changes) {
         if (change.type === 'remove') {
-          const edge = edges.find((e) => e.id === change.id);
-          if (edge) {
-            const containerId = containers[edge.source];
-            const networkId = networks[edge.target];
+          const removedEdge = edges.find((e) => e.id === change.id);
+          if (!removedEdge) continue;
 
-            if (containerId && networkId) {
-              try {
-                await axios.post(`${BASE_URL}/networks/disconnect`, {
-                  containerId,
-                  networkId,
-                });
-              } catch (err) {
-                console.error('Failed to disconnect container:', err);
-              }
+          const { source, target } = removedEdge;
+
+          const sourceId = containers[source];
+          const targetId = containers[target];
+          const sourceNetwork = networks[source];
+          const targetNetwork = networks[target];
+
+          // Case 2: Router ↔ Router → remove bridge router container
+          if (sourceNetwork && targetNetwork) {
+            console.log("Removing bridge router:", sourceNetwork, targetNetwork);
+            
+            try {
+              await axios.post(`${BASE_URL}/networks/remove-bridge-router`, {
+                network1: sourceNetwork,
+                network2: targetNetwork,
+              });
+            } catch (err) {
+              console.warn("Error removing bridge router:", err);
             }
           }
+          // Case 1: Container ↔ Network (Node ↔ Router)
+          if (sourceId && targetNetwork) {
+            try {
+              await axios.post(`${BASE_URL}/networks/disconnect`, {
+                containerId: sourceId,
+                networkId: targetNetwork,
+              });
+            } catch (err) {
+              console.warn("Error disconnecting from network:", err);
+            }
+          }
+
+          if (targetId && sourceNetwork) {
+            try {
+              await axios.post(`${BASE_URL}/networks/disconnect`, {
+                containerId: targetId,
+                networkId: sourceNetwork,
+              });
+            } catch (err) {
+              console.warn("Error disconnecting from network:", err);
+            }
+          }
+
+          
         }
       }
+
+      // Finally update local edge state
       setEdges((eds) => applyEdgeChanges(changes, eds));
-      //console.log(edges, networks);
     },
     [edges, containers, networks]
   );
@@ -149,6 +182,13 @@ export default function Flow() {
       const sourceDockerId = containers[connection.source] || containers[connection.target];
       const targetDockerId = networks[connection.target] || networks[connection.source];
       console.log(connection.source, connection.target, sourceDockerId, targetDockerId);
+      if (networks[connection.source] && networks[connection.target]) {
+        // Both are routers → create a bridge router container
+        const result = await createBridgeRouter(networks[connection.source], networks[connection.target]);
+        console.log("Bridge container ID", result.containerId);
+        setEdges((eds) => addEdge({ ...connection, type: 'step' }, eds));
+        return;
+      }
       if (sourceDockerId && targetDockerId) {
         await connectToNetwork(sourceDockerId, targetDockerId);
         setEdges((eds) => addEdge({ ...connection, type: 'step' }, eds));
@@ -182,10 +222,12 @@ export default function Flow() {
   const addRouterNode = async () => {
     const data = await createNetwork();
     const nodeId = getId();
+    console.log(data.name);
+    
 
     setNetworks((prev) => ({
       ...prev,
-      [nodeId]: data.id,
+      [nodeId]: data.name,
     }));
 
     setNodes((nds) => [

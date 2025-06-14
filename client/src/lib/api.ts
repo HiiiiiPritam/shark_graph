@@ -28,3 +28,11 @@ export const pingContainer = async (sourceId: string, targetIp: string) => {
   });
   return res.data;
 };
+
+export const createBridgeRouter= async (network1: string, network2: string) => {
+  const res = await axios.post(`${BASE_URL}/networks/bridge`, {
+    network1,
+    network2,
+  });
+  return res.data;
+}

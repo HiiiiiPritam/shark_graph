@@ -1,53 +1,55 @@
 // server/routes/networks.js
-import express from 'express';
-import docker from '../docker.js';
+import express from "express";
+import docker from "../docker.js";
 
 const router = express.Router();
 
-router.get('/', async (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const networks = await docker.listNetworks();
     res.json(networks);
   } catch (err) {
-    console.error('Error listing networks:', err);
+    console.error("Error listing networks:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-router.post('/', async (req, res) => {
+router.post("/", async (req, res) => {
   try {
-    let name = `net_${Date.now()}`
+    let name = `net_${Date.now()}`;
     const network = await docker.createNetwork({
       Name: name,
-      Driver: 'bridge',
+      Driver: "bridge",
       IPAM: {
-        Config: [{ Subnet: '192.168.' + Math.floor(Math.random() * 255) + '.0/24' }],
+        Config: [
+          { Subnet: "192.168." + Math.floor(Math.random() * 255) + ".0/24" },
+        ],
       },
     });
     //console.log("Created network:", network);
-    res.json({ id: network.id, name:name });
+    res.json({ id: network.id, name: name });
   } catch (err) {
-    console.error('Error creating network:', err);
+    console.error("Error creating network:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-router.post('/connect', async (req, res) => {
+router.post("/connect", async (req, res) => {
   const { containerId, networkId } = req.body;
 
   try {
     const network = docker.getNetwork(networkId);
     await network.connect({ Container: containerId });
 
-    res.json({ message: 'Container connected to network' });
+    res.json({ message: "Container connected to network" });
   } catch (err) {
-    console.error('Error connecting container to network:', err);
+    console.error("Error connecting container to network:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
 // server/routes/networks.js
-router.post('/disconnect', async (req, res) => {
+router.post("/disconnect", async (req, res) => {
   const { containerId, networkId } = req.body;
 
   try {
@@ -56,24 +58,27 @@ router.post('/disconnect', async (req, res) => {
 
     console.log("Network containers:", data.Containers);
     console.log("Requested to disconnect container:", containerId);
-    await new Promise(r => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 100));
     if (!data.Containers || !data.Containers[containerId]) {
-      return res.status(200).json({ message: 'Already disconnected or not part of network' });
+      return res
+        .status(200)
+        .json({ message: "Already disconnected or not part of network" });
     }
     await network.disconnect({ Container: containerId, Force: true });
-    res.json({ message: 'Disconnected successfully' });
+    res.json({ message: "Disconnected successfully" });
   } catch (err) {
     if (err.message.includes("is not connected to network")) {
-    console.warn(`Container ${containerId} already disconnected from network ${networkId}`);
-  } else {
-    throw err;
-  }
+      console.warn(
+        `Container ${containerId} already disconnected from network ${networkId}`
+      );
+    } else {
+      throw err;
+    }
   }
 });
 
-
 // DELETE /networks/:id
-router.delete('/:id', async (req, res) => {
+router.delete("/:id", async (req, res) => {
   const networkId = req.params.id;
 
   try {
@@ -83,7 +88,7 @@ router.delete('/:id', async (req, res) => {
     // const data = await network.inspect();
     // const connectedContainers = data.Containers;
     // console.log(connectedContainers);
-    
+
     // if (connectedContainers) {
     //   // Step 2: Disconnect all containers from the network
     //   for (const containerId of Object.keys(connectedContainers)) {
@@ -97,33 +102,34 @@ router.delete('/:id', async (req, res) => {
 
     // Step 3: Remove the network
     await network.remove();
-    res.json({ message: 'Network deleted successfully' });
-
+    res.json({ message: "Network deleted successfully" });
   } catch (err) {
-    console.error('Error deleting network:', err);
-    res.status(500).json({ error: 'Failed to delete network' });
+    console.error("Error deleting network:", err);
+    res.status(500).json({ error: "Failed to delete network" });
   }
 });
 
-router.post('/bridge', async (req, res) => {
+router.post("/bridge", async (req, res) => {
   const { network1, network2 } = req.body;
 
   if (!network1 || !network2) {
-    return res.status(400).json({ error: 'Both network IDs are required.' });
+    return res.status(400).json({ error: "Both network IDs are required." });
   }
 
   try {
     // Step 1: Create a router container
     const container = await docker.createContainer({
-      Image: 'alpine', // Or 'ubuntu' if you prefer
-      Cmd: ['sh', '-c', `
-  apk add --no-cache iptables iproute2 &&
-  iptables -P FORWARD ACCEPT &&
-  while true; do sleep 3600; done
-  `],
-      name: `bridge_${network1.substring(0, 5)}_${network2.substring(0, 5)}`,
+      Image: 'ubuntu',
+      Cmd: [
+        'sh',
+        '-c',
+        'apt update && apt install -y iproute2 iputils-ping iptables && sysctl -w net.ipv4.ip_forward=1 && iptables -P FORWARD ACCEPT && sleep infinity',
+      ],
+      name: `bridge_${network1.substring(0, 10)}_${network2.substring(0, 10)}`,
       Tty: true,
-      
+      HostConfig: {
+        Privileged: true,
+      },
     });
 
     await container.start();
@@ -136,25 +142,24 @@ router.post('/bridge', async (req, res) => {
     await net2.connect({ Container: container.id });
     console.log("Connected to both networks", container.id);
     res.json({
-      message: 'Bridge container created and connected to both networks',
+      message: "Bridge container created and connected to both networks",
       containerId: container.id,
-      name: `bridge_${network1.substring(0, 5)}_${network2.substring(0, 5)}`
+      name: `bridge_${network1.substring(0, 5)}_${network2.substring(0, 5)}`,
     });
   } catch (error) {
-    console.error('Error creating bridge router:', error);
+    console.error("Error creating bridge router:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // server/routes/network.js
-router.post('/remove-bridge-router', async (req, res) => {
+router.post("/remove-bridge-router", async (req, res) => {
   const { network1, network2 } = req.body;
 
   try {
     // Logic to find and remove any router container connected to both networks
     const containers = await docker.listContainers({ all: true });
-    
-    
+
     for (const c of containers) {
       const container = docker.getContainer(c.Id);
       const info = await container.inspect();
@@ -166,10 +171,14 @@ router.post('/remove-bridge-router', async (req, res) => {
         connectedNets.includes(network2)
       ) {
         // Disconnect from both and remove container
-        //console.log("Found bridge router container:", c.Id);
-        
-        await docker.getNetwork(network1).disconnect({ Container: c.Id, Force: true });
-        await docker.getNetwork(network2).disconnect({ Container: c.Id, Force: true });
+        console.log("Found bridge router container:", c.Id);
+
+        await docker
+          .getNetwork(network1)
+          .disconnect({ Container: c.Id, Force: true });
+        await docker
+          .getNetwork(network2)
+          .disconnect({ Container: c.Id, Force: true });
 
         await container.remove({ force: true });
 
@@ -185,7 +194,5 @@ router.post('/remove-bridge-router', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-
 
 export default router;

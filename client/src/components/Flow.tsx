@@ -222,7 +222,7 @@ export default function Flow() {
   const addRouterNode = async () => {
     const data = await createNetwork();
     const nodeId = getId();
-    console.log(data.name);
+    //console.log(data.name);
     
 
     setNetworks((prev) => ({
@@ -261,7 +261,7 @@ export default function Flow() {
       
 
       try {
-        console.log(targetContainerId);
+        console.log(targetContainerId, sourceContainerId);
       
         const result = await pingContainer(sourceContainerId, targetContainerId);
         console.log(result);

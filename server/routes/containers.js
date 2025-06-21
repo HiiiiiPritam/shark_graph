@@ -21,7 +21,7 @@ router.post('/', async (req, res) => {
       Cmd: ['/bin/sh'],
       Tty: true,
       HostConfig: {
-        
+        CapAdd: ['NET_ADMIN'],
       },
     });
 

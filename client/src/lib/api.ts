@@ -21,10 +21,11 @@ export const connectToNetwork = async (containerId: string, networkId: string) =
   return res.data;
 };
 
-export const pingContainer = async (sourceId: string, targetIp: string) => {
+export const pingContainer = async (sourceId: string, targetId: string) => {
+
   const res = await axios.post(`${BASE_URL}/ping`, {
     sourceId,
-    targetIp,
+    targetId,
   });
   return res.data;
 };

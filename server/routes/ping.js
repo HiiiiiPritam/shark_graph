@@ -12,11 +12,9 @@ router.post('/', async (req, res) => {
     const src = docker.getContainer(sourceId);
     const tgt = docker.getContainer(targetId);
     const [ srcInfo, tgtInfo ] = await Promise.all([ src.inspect(), tgt.inspect() ]);
-
     // 2. Figure out which networks each sits on
     const srcNets = Object.keys(srcInfo.NetworkSettings.Networks);
     const tgtNets = Object.keys(tgtInfo.NetworkSettings.Networks);
-
     // 3. See if they share a network
     const common = srcNets.find((n) => tgtNets.includes(n));
     let targetIp;

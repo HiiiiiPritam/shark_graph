@@ -300,7 +300,7 @@ export default function Flow() {
         >
         {pingMode ? '❌ Cancel Ping' : '📡 Ping Tool'}
         </button>
-
+        <div className='text-white text-2xl font-bold'>The nodes here are actual docker containers</div>
       </div>
 
       <div className="w-full h-full border border-gray-300 rounded">

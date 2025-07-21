@@ -1,0 +1,17 @@
+@keyframes glow {
+  0%, 100% { text-shadow: 0 0 6px #06b6d4, 0 0 12px #06b6d4; }
+  50% { text-shadow: 0 0 20px #38bdf8, 0 0 40px #38bdf8; }
+}
+
+.animate-flicker {
+  animation: glow 2s infinite ease-in-out;
+}
+
+.with-animation {
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}

@@ -7,10 +7,11 @@ import { loadFull } from 'tsparticles';
 import { FaDocker, FaDesktop, FaNetworkWired, FaRocket } from 'react-icons/fa';
 import DockerPage from '@/components/DockerPage';
 import SimPage from '@/components/SimulatedPage';
+import RealisticNetworkFlow from '@/components/RealisticNetworkFlow';
 import '@/styles/animation.css';
 
 export default function Home() {
-  const [tab, setTab] = useState<'docker' | 'sim'>('sim');
+  const [tab, setTab] = useState<'realistic' | 'docker' | 'sim'>('realistic');
 
   return (
     <div className="relative min-h-screen bg-gray-900 text-black overflow-hidden">
@@ -24,12 +25,21 @@ export default function Home() {
 
         <nav className="flex space-x-4 mb-6">
           <button
+            onClick={() => setTab('realistic')}
+            className={`px-4 py-2 rounded ${
+              tab === 'realistic' ? 'bg-green-600' : 'bg-gray-700 hover:bg-gray-600'
+            } transition`}
+          >
+            <FaNetworkWired className="inline mr-2" /> Realistic Lab
+          </button>
+          
+          <button
             onClick={() => setTab('sim')}
             className={`px-4 py-2 rounded ${
               tab === 'sim' ? 'bg-cyan-600' : 'bg-gray-700 hover:bg-gray-600'
             } transition`}
           >
-            <FaDesktop className="inline mr-2" /> Simulated Lab
+            <FaDesktop className="inline mr-2" /> Basic Simulation
           </button>
 
           <button
@@ -42,8 +52,9 @@ export default function Home() {
           </button>
         </nav>
 
-        <main className="bg-gray-800 rounded-lg p-6 shadow-lg with-animation">
-          {tab === 'sim' ? <SimPage /> : <DockerPage />}
+        <main className={`${tab === 'realistic' ? 'bg-transparent p-0' : 'bg-gray-800 rounded-lg p-6'} shadow-lg with-animation`}>
+          {tab === 'realistic' ? <RealisticNetworkFlow /> : 
+           tab === 'sim' ? <SimPage /> : <DockerPage />}
         </main>
       </div>
     </div>

@@ -466,7 +466,7 @@ export default function EducationalTutorials({ onClose }: EducationalTutorialsPr
 
   const renderTutorialList = () => (
     <div className="p-6">
-      <h2 className="text-2xl font-bold mb-6">Educational Tutorials</h2>
+      <h2 className="text-2xl font-bold mb-6 text-black">Educational Tutorials</h2>
       <div className="grid gap-4">
         {tutorials.map(tutorial => (
           <div key={tutorial.id} className="border border-gray-300 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
@@ -569,7 +569,7 @@ export default function EducationalTutorials({ onClose }: EducationalTutorialsPr
               {!showQuizResults && (
                 <button
                   onClick={handleQuizSubmit}
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                  className="px-4 py-2 bg-blue-500 rounded hover:bg-blue-600"
                   disabled={Object.keys(quizAnswers).length < (lesson.quiz?.length || 0)}
                 >
                   Submit Quiz
@@ -629,7 +629,7 @@ export default function EducationalTutorials({ onClose }: EducationalTutorialsPr
           <div className="flex items-center gap-2">
             <button
               onClick={() => setSelectedTutorial(null)}
-              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+              className="px-4 py-2 bg-gray-500 rounded hover:bg-gray-600"
             >
               Back to Tutorials
             </button>
@@ -651,7 +651,7 @@ export default function EducationalTutorials({ onClose }: EducationalTutorialsPr
             {lesson.type === 'hands-on' && !isCompleted && (
               <button
                 onClick={() => markLessonComplete(lesson.id)}
-                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+                className="px-4 py-2 bg-green-500 rounded hover:bg-green-600"
               >
                 Mark Complete
               </button>
@@ -663,7 +663,7 @@ export default function EducationalTutorials({ onClose }: EducationalTutorialsPr
                   setShowQuizResults(false);
                   setQuizAnswers({});
                 }}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-2"
+                className="px-4 py-2 bg-blue-500  rounded hover:bg-blue-600 flex items-center gap-2"
                 disabled={lesson.type === 'quiz' && !showQuizResults}
               >
                 Next <FaChevronRight />

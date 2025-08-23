@@ -19,6 +19,9 @@ export class NetworkSimulator {
   private events: SimulationEvent[] = [];
   private isRunning: boolean = false;
   private eventCounter: number = 0;
+  private currentPingTraces: PacketTrace[] = [];
+  private isCollectingTraces: boolean = false;
+  private currentStepCounter: number = 0;
 
   constructor() {
     console.log('Network Simulator initialized');
@@ -244,13 +247,57 @@ export class NetworkSimulator {
       throw new Error('Source host not found');
     }
 
-    console.log(`\n🏓 Starting ping from ${sourceHost.name} to ${destinationIP}`);
+    console.log(`\n🏓 PING: Starting ping from ${sourceHost.name} to ${destinationIP}`);
     
     try {
-      const traces = await (sourceHost as Host).sendPing(destinationIP);
+      // Clear previous traces and start collecting
+      this.currentPingTraces = [];
+      this.isCollectingTraces = true;
+      this.currentStepCounter = 0;
+      console.log(`🏓 PING: Started trace collection`);
       
-      // Simulate packet traveling through the network
-      await this.simulatePacketFlow(traces);
+      // Create initial "generated" trace
+      this.currentStepCounter = 1;
+      const initialTrace: PacketTrace = {
+        stepNumber: this.currentStepCounter,
+        timestamp: Date.now(),
+        deviceName: sourceHost.name,
+        deviceId: sourceHostId,
+        deviceType: 'host',
+        action: 'generated',
+        outgoingInterface: sourceHost.interfaces[0]?.name,
+        packet: {
+          id: Math.random().toString(36).substr(2, 9),
+          sourceMac: sourceHost.interfaces[0]?.macAddress || { address: '00:00:00:00:00:00' },
+          destinationMac: { address: 'ff:ff:ff:ff:ff:ff' },
+          etherType: 0x0800,
+          payload: {} as any,
+          timestamp: Date.now()
+        },
+        decision: `Generated ICMP ping to ${destinationIP}`
+      };
+      this.currentPingTraces.push(initialTrace);
+      console.log(`🏓 PING: Added initial trace - Step ${initialTrace.stepNumber}`);
+      
+      // Trigger the ping - this will start the forwarding process
+      await (sourceHost as Host).sendPing(destinationIP);
+      console.log(`🏓 PING: Ping initiated from ${sourceHost.name}`);
+      
+      
+      // Wait for the network forwarding to complete and collect all traces
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Stop collecting
+      this.isCollectingTraces = false;
+      
+      console.log(`🏓 PING: Collection complete - ${this.currentPingTraces?.length || 0} total traces`);
+      if (this.currentPingTraces && this.currentPingTraces.length > 0) {
+        this.currentPingTraces.forEach((trace, idx) => {
+          if (trace) {
+            console.log(`  Final Trace ${idx + 1}: Step ${trace.stepNumber || 0} - ${trace.deviceName || 'Unknown'} - ${trace.action || 'Unknown'}`);
+          }
+        });
+      }
       
       this.addEvent({
         id: this.generateEventId(),
@@ -260,68 +307,20 @@ export class NetworkSimulator {
         details: { 
           type: 'ping', 
           destination: destinationIP, 
-          success: traces.length > 0 
+          success: (this.currentPingTraces?.length || 0) > 0 
         },
       });
 
-      return traces;
+      const finalTraces = this.currentPingTraces || [];
+      console.log(`🏓 PING: Returning ${finalTraces.length} traces to UI`);
+      return [...finalTraces];
     } catch (error) {
-      console.error(`Ping failed: ${error}`);
+      console.error(`🏓 PING: Failed - ${error}`);
+      this.isCollectingTraces = false;
       return [];
     }
   }
 
-  private async simulatePacketFlow(traces: PacketTrace[]): Promise<void> {
-    // Enhanced packet flow simulation with proper routing support
-    const processedHops = new Set<string>();
-    
-    for (let i = 0; i < traces.length; i++) {
-      const trace = traces[i];
-      
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 50));
-      
-      console.log(`Step ${trace.stepNumber}: ${trace.deviceName} - ${trace.decision}`);
-      
-      // Skip if we've already processed this hop to avoid loops
-      const hopKey = `${trace.deviceId}-${trace.outgoingInterface}`;
-      if (processedHops.has(hopKey)) {
-        continue;
-      }
-      processedHops.add(hopKey);
-      
-      if (trace.outgoingInterface && trace.action === 'forwarded') {
-        // Find connected device and forward packet
-        const sourceDevice = this.devices.get(trace.deviceId);
-        if (sourceDevice) {
-          const connectedLink = this.findLinkByInterface(trace.deviceId, trace.outgoingInterface);
-          if (connectedLink) {
-            const targetDeviceId = connectedLink.deviceA === trace.deviceId ? 
-              connectedLink.deviceB : connectedLink.deviceA;
-            const targetInterface = connectedLink.deviceA === trace.deviceId ? 
-              connectedLink.interfaceB : connectedLink.interfaceA;
-            
-            const targetDevice = this.devices.get(targetDeviceId);
-            if (targetDevice) {
-              console.log(`Forwarding from ${trace.deviceName} to ${targetDevice.name} via ${trace.outgoingInterface}->${targetInterface}`);
-              
-              // Forward packet to next device
-              if (targetDevice.type === 'host') {
-                await (targetDevice as Host).receiveFrame(trace.packet, targetInterface);
-              } else if (targetDevice.type === 'switch') {
-                await (targetDevice as Switch).receiveFrame(trace.packet, targetInterface);
-              } else if (targetDevice.type === 'router') {
-                const routerTraces = await (targetDevice as Router).receiveFrame(trace.packet, targetInterface);
-                traces.push(...routerTraces);
-              }
-            }
-          } else {
-            console.log(`No link found for ${trace.deviceName}:${trace.outgoingInterface}`);
-          }
-        }
-      }
-    }
-  }
 
   // Network Analysis
   analyzeNetworkTopology(): {
@@ -491,18 +490,68 @@ export class NetworkSimulator {
       return;
     }
 
-    console.log(`Forwarding frame from ${fromDevice}:${outgoingInterface} to ${targetDeviceId}:${targetInterface}`);
+    console.log(`🔄 Forwarding frame from ${fromDevice}:${outgoingInterface} to ${targetDeviceId}:${targetInterface}`);
+    console.log(`🔄 isCollectingTraces: ${this.isCollectingTraces}`);
 
-    // Forward frame to target device
+    // Create centralized traces for both sending and receiving
+    if (this.isCollectingTraces) {
+      if (!this.currentPingTraces) this.currentPingTraces = [];
+      
+      // 1. Add sending trace
+      this.currentStepCounter = (this.currentStepCounter || 0) + 1;
+      const sendingDevice = this.devices.get(fromDevice);
+      if (sendingDevice) {
+        const sendTrace: PacketTrace = {
+          stepNumber: this.currentStepCounter,
+          timestamp: Date.now(),
+          deviceName: sendingDevice.name,
+          deviceId: fromDevice,
+          deviceType: sendingDevice.type as 'host' | 'switch' | 'router',
+          action: 'forwarded',
+          outgoingInterface: outgoingInterface,
+          packet: { ...frame },
+          decision: `Frame forwarded out interface ${outgoingInterface} to ${targetDevice.name}`
+        };
+        
+        this.currentPingTraces.push(sendTrace);
+        console.log(`📤 ADDED sending trace: Step ${sendTrace.stepNumber} - ${sendTrace.deviceName} - ${sendTrace.action}`);
+      }
+      
+      // 2. Add receiving trace  
+      this.currentStepCounter = (this.currentStepCounter || 0) + 1;
+      const receiveTrace: PacketTrace = {
+        stepNumber: this.currentStepCounter,
+        timestamp: Date.now(),
+        deviceName: targetDevice.name,
+        deviceId: targetDeviceId,
+        deviceType: targetDevice.type as 'host' | 'switch' | 'router',
+        action: 'received',
+        incomingInterface: targetInterface,
+        packet: { ...frame },
+        decision: `Frame received on interface ${targetInterface} from ${sendingDevice?.name || fromDevice}`
+      };
+      
+      this.currentPingTraces.push(receiveTrace);
+      console.log(`📥 ADDED receiving trace: Step ${receiveTrace.stepNumber} - ${receiveTrace.deviceName} - ${receiveTrace.action}`);
+    }
+
+    // Forward frame to target device (no trace collection from devices)
     try {
       if (targetDevice.type === 'host') {
+        console.log(`📥 Forwarding to HOST: ${targetDevice.name}`);
         await (targetDevice as Host).receiveFrame(frame, targetInterface);
       } else if (targetDevice.type === 'switch') {
+        console.log(`🔀 Forwarding to SWITCH: ${targetDevice.name}`);
         await (targetDevice as Switch).receiveFrame(frame, targetInterface);
       } else if (targetDevice.type === 'router') {
-        const traces = await (targetDevice as Router).receiveFrame(frame, targetInterface);
-        // Router might generate additional traces, but we don't need to handle them here
-        // as the router will use its own callback to forward packets
+        console.log(`🛤️  Forwarding to ROUTER: ${targetDevice.name}`);
+        await (targetDevice as Router).receiveFrame(frame, targetInterface);
+      }
+      
+      console.log(`✅ Frame forwarded to ${targetDevice.name} successfully`);
+      
+      if (this.isCollectingTraces) {
+        console.log(`📊 Total collected traces now: ${this.currentPingTraces?.length || 0}`);
       }
     } catch (error) {
       console.error(`Error forwarding frame to ${targetDeviceId}:`, error);

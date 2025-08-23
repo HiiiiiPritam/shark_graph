@@ -80,20 +80,6 @@ export class Switch implements SwitchInterface {
   async receiveFrame(frame: EthernetFrame, incomingInterface: string): Promise<void> {
     if (this.status === 'down') return;
 
-    const trace: PacketTrace = {
-      stepNumber: this.packetTracer.getNextStepNumber(),
-      deviceId: this.id,
-      deviceName: this.name,
-      deviceType: 'switch',
-      action: 'received',
-      incomingInterface,
-      packet: frame,
-      timestamp: Date.now(),
-      decision: `Frame received on port ${incomingInterface}`,
-    };
-    
-    this.packetTracer.addTrace(trace);
-
     // 1. Learn source MAC address
     this.learnMACAddress(frame.sourceMac, incomingInterface);
 
@@ -111,19 +97,6 @@ export class Switch implements SwitchInterface {
       await this.forwardFrame(frame, destinationPort, incomingInterface);
     } else {
       // Unknown unicast - flood to all ports except incoming
-      const floodTrace: PacketTrace = {
-        stepNumber: this.packetTracer.getNextStepNumber(),
-        deviceId: this.id,
-        deviceName: this.name,
-        deviceType: 'switch',
-        action: 'forwarded',
-        incomingInterface,
-        packet: frame,
-        timestamp: Date.now(),
-        decision: `Unknown destination MAC ${frame.destinationMac.address} - flooding to all ports`,
-      };
-      this.packetTracer.addTrace(floodTrace);
-      
       await this.floodFrame(frame, incomingInterface);
     }
   }
@@ -138,19 +111,6 @@ export class Switch implements SwitchInterface {
       // Update existing entry
       existingEntry.port = port;
       existingEntry.age = 0;
-      
-      const updateTrace: PacketTrace = {
-        stepNumber: this.packetTracer.getNextStepNumber(),
-        deviceId: this.id,
-        deviceName: this.name,
-        deviceType: 'switch',
-        action: 'received',
-        packet: {} as EthernetFrame, // Placeholder
-        timestamp: Date.now(),
-        decision: `Updated MAC table: ${sourceMac.address} moved to port ${port}`,
-        macTableUsed: existingEntry,
-      };
-      this.packetTracer.addTrace(updateTrace);
     } else {
       // Add new entry
       const newEntry: MACTableEntry = {
@@ -162,19 +122,6 @@ export class Switch implements SwitchInterface {
       };
       
       this.macAddressTable.push(newEntry);
-      
-      const learnTrace: PacketTrace = {
-        stepNumber: this.packetTracer.getNextStepNumber(),
-        deviceId: this.id,
-        deviceName: this.name,
-        deviceType: 'switch',
-        action: 'received',
-        packet: {} as EthernetFrame, // Placeholder
-        timestamp: Date.now(),
-        decision: `Learned new MAC: ${sourceMac.address} on port ${port}`,
-        macTableUsed: newEntry,
-      };
-      this.packetTracer.addTrace(learnTrace);
     }
   }
 

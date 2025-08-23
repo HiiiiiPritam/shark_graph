@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { PacketTrace, EthernetFrame, IPPacket, ICMPPacket, ARPPacket } from '@/lib/network/types';
 import { NetworkStack } from '@/lib/network/protocols/NetworkStack';
-import { FaSearch, FaPlay, FaPause, FaStop, FaDownload, FaFilter, FaExpand } from 'react-icons/fa';
+import { FaSearch, FaPlay, FaPause, FaStop, FaDownload, FaFilter, FaExpand, FaInfoCircle } from 'react-icons/fa';
 
 interface PacketAnalyzerProps {
   traces: PacketTrace[];
@@ -17,8 +17,10 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
   const [filter, setFilter] = useState('');
   const [filteredTraces, setFilteredTraces] = useState<PacketTrace[]>([]);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['ethernet']));
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
+    console.log(`🔍 PacketAnalyzer: Received ${traces.length} traces:`, traces);
     applyFilter();
   }, [traces, filter]);
 
@@ -92,29 +94,6 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
     setExpandedSections(newExpanded);
   };
 
-  const exportCapture = () => {
-    const data = {
-      timestamp: new Date().toISOString(),
-      captureInfo: {
-        totalPackets: traces.length,
-        filteredPackets: filteredTraces.length,
-        duration: traces.length > 0 ? 
-          traces[traces.length - 1].timestamp - traces[0].timestamp : 0,
-      },
-      traces: filteredTraces,
-    };
-
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `network-capture-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
   const formatTimestamp = (timestamp: number) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString() + '.' + String(date.getMilliseconds()).padStart(3, '0');
@@ -124,10 +103,10 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
     // Simplified packet length calculation
     let length = 14; // Ethernet header
     
-    if (packet.etherType === 0x0800) {
+    if (packet?.etherType === 0x0800 && packet.payload) {
       const ipPacket = packet.payload as IPPacket;
-      length += ipPacket.totalLength;
-    } else if (packet.etherType === 0x0806) {
+      length += ipPacket?.totalLength || 0;
+    } else if (packet?.etherType === 0x0806) {
       length += 28; // ARP packet size
     }
     
@@ -135,53 +114,70 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
   };
 
   const getPacketProtocol = (packet: EthernetFrame): string => {
-    if (packet.etherType === 0x0800) {
+    if (packet?.etherType === 0x0800 && packet.payload) {
       const ipPacket = packet.payload as IPPacket;
-      return NetworkStack.parseIPProtocol(ipPacket.protocol);
-    } else if (packet.etherType === 0x0806) {
+      return NetworkStack.parseIPProtocol(ipPacket?.protocol);
+    } else if (packet?.etherType === 0x0806) {
       return 'ARP';
     }
-    return NetworkStack.parseEtherType(packet.etherType);
+    return NetworkStack.parseEtherType(packet?.etherType);
   };
 
   const getPacketInfo = (trace: PacketTrace): string => {
     const packet = trace.packet;
+    const actionEmoji = {
+      'received': '📥',
+      'forwarded': '🔄', 
+      'generated': '📤',
+      'dropped': '❌',
+      'processed': '⚙️'
+    }[trace.action] || '📄';
     
-    if (packet.etherType === 0x0800) {
+    const safeAction = trace.action?.toUpperCase() || 'UNKNOWN';
+    
+    if (packet?.etherType === 0x0800 && packet.payload) {
       const ipPacket = packet.payload as IPPacket;
+      const sourceIP = ipPacket?.sourceIP?.address || 'Unknown';
+      const destIP = ipPacket?.destinationIP?.address || 'Unknown';
       
-      if (ipPacket.protocol === 1) { // ICMP
+      if (ipPacket?.protocol === 1 && ipPacket.payload) { // ICMP
         const icmpPacket = ipPacket.payload as ICMPPacket;
-        const icmpType = NetworkStack.parseICMPType(icmpPacket.type);
-        return `${ipPacket.sourceIP.address} → ${ipPacket.destinationIP.address} ${icmpType}`;
+        const icmpType = NetworkStack.parseICMPType(icmpPacket?.type);
+        return `${actionEmoji} ${safeAction} | ${sourceIP} → ${destIP} | ${icmpType}`;
       }
       
-      return `${ipPacket.sourceIP.address} → ${ipPacket.destinationIP.address} ${NetworkStack.parseIPProtocol(ipPacket.protocol)}`;
-    } else if (packet.etherType === 0x0806) {
+      const protocol = NetworkStack.parseIPProtocol(ipPacket?.protocol);
+      return `${actionEmoji} ${safeAction} | ${sourceIP} → ${destIP} | ${protocol}`;
+    } else if (packet?.etherType === 0x0806 && packet.payload) {
       const arpPacket = packet.payload as ARPPacket;
-      const operation = NetworkStack.parseARPOperation(arpPacket.operation);
-      return `${arpPacket.senderProtocolAddress.address} → ${arpPacket.targetProtocolAddress.address} ARP ${operation}`;
+      const senderIP = arpPacket?.senderProtocolAddress?.address || 'Unknown';
+      const targetIP = arpPacket?.targetProtocolAddress?.address || 'Unknown';
+      const operation = NetworkStack.parseARPOperation(arpPacket?.operation);
+      return `${actionEmoji} ${safeAction} | ${senderIP} → ${targetIP} | ARP ${operation}`;
     }
     
-    return `${packet.sourceMac.address} → ${packet.destinationMac.address} ${NetworkStack.parseEtherType(packet.etherType)}`;
+    const srcMac = packet?.sourceMac?.address || 'Unknown';
+    const dstMac = packet?.destinationMac?.address || 'Unknown';
+    const etherType = NetworkStack.parseEtherType(packet?.etherType);
+    return `${actionEmoji} ${safeAction} | ${srcMac} → ${dstMac} | ${etherType}`;
   };
 
   const renderEthernetHeader = (frame: EthernetFrame) => (
     <div className="mb-4">
       <div
-        className="bg-blue-100 p-2 cursor-pointer flex items-center justify-between"
+        className="bg-blue-100 p-2 cursor-pointer flex items-center justify-between hover:bg-blue-200 transition-colors"
         onClick={() => toggleSection('ethernet')}
       >
-        <h3 className="font-semibold">Ethernet II Header</h3>
-        <FaExpand className={`transform ${expandedSections.has('ethernet') ? 'rotate-180' : ''}`} />
+        <h3 className="font-semibold text-gray-900">Ethernet II Header</h3>
+        <FaExpand className={`transform transition-transform ${expandedSections.has('ethernet') ? 'rotate-180' : ''} text-gray-700`} />
       </div>
       {expandedSections.has('ethernet') && (
         <div className="bg-gray-50 p-3 border border-blue-200">
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><span className="font-medium">Destination MAC:</span> {frame.destinationMac.address}</div>
-            <div><span className="font-medium">Source MAC:</span> {frame.sourceMac.address}</div>
-            <div><span className="font-medium">EtherType:</span> 0x{frame.etherType.toString(16).padStart(4, '0')} ({NetworkStack.parseEtherType(frame.etherType)})</div>
-            <div><span className="font-medium">Frame ID:</span> {frame.id}</div>
+            <div><span className="font-medium text-gray-700">Destination MAC:</span> <span className="text-gray-900 font-mono">{frame?.destinationMac?.address || 'Unknown'}</span></div>
+            <div><span className="font-medium text-gray-700">Source MAC:</span> <span className="text-gray-900 font-mono">{frame?.sourceMac?.address || 'Unknown'}</span></div>
+            <div><span className="font-medium text-gray-700">EtherType:</span> <span className="text-gray-900 font-mono">0x{frame?.etherType?.toString(16).padStart(4, '0') || '????'} ({NetworkStack.parseEtherType(frame?.etherType)})</span></div>
+            <div><span className="font-medium text-gray-700">Frame ID:</span> <span className="text-gray-900">{frame?.id || 'Unknown'}</span></div>
           </div>
         </div>
       )}
@@ -191,27 +187,27 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
   const renderIPHeader = (ipPacket: IPPacket) => (
     <div className="mb-4">
       <div
-        className="bg-green-100 p-2 cursor-pointer flex items-center justify-between"
+        className="bg-green-100 p-2 cursor-pointer flex items-center justify-between hover:bg-green-200 transition-colors"
         onClick={() => toggleSection('ip')}
       >
-        <h3 className="font-semibold">IP Header (IPv{ipPacket.version})</h3>
-        <FaExpand className={`transform ${expandedSections.has('ip') ? 'rotate-180' : ''}`} />
+        <h3 className="font-semibold text-gray-900">IP Header (IPv{ipPacket.version})</h3>
+        <FaExpand className={`transform transition-transform ${expandedSections.has('ip') ? 'rotate-180' : ''} text-gray-700`} />
       </div>
       {expandedSections.has('ip') && (
         <div className="bg-gray-50 p-3 border border-green-200">
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><span className="font-medium">Version:</span> {ipPacket.version}</div>
-            <div><span className="font-medium">Header Length:</span> {ipPacket.headerLength} bytes</div>
-            <div><span className="font-medium">Type of Service:</span> 0x{ipPacket.typeOfService.toString(16)}</div>
-            <div><span className="font-medium">Total Length:</span> {ipPacket.totalLength} bytes</div>
-            <div><span className="font-medium">Identification:</span> 0x{ipPacket.identification.toString(16)}</div>
-            <div><span className="font-medium">Flags:</span> 0x{ipPacket.flags.toString(16)}</div>
-            <div><span className="font-medium">Fragment Offset:</span> {ipPacket.fragmentOffset}</div>
-            <div><span className="font-medium">Time to Live:</span> {ipPacket.timeToLive}</div>
-            <div><span className="font-medium">Protocol:</span> {ipPacket.protocol} ({NetworkStack.parseIPProtocol(ipPacket.protocol)})</div>
-            <div><span className="font-medium">Header Checksum:</span> 0x{ipPacket.headerChecksum.toString(16)}</div>
-            <div><span className="font-medium">Source IP:</span> {ipPacket.sourceIP.address}</div>
-            <div><span className="font-medium">Destination IP:</span> {ipPacket.destinationIP.address}</div>
+            <div><span className="font-medium text-gray-700">Version:</span> <span className="text-gray-900">{ipPacket.version}</span></div>
+            <div><span className="font-medium text-gray-700">Header Length:</span> <span className="text-gray-900">{ipPacket.headerLength} bytes</span></div>
+            <div><span className="font-medium text-gray-700">Type of Service:</span> <span className="text-gray-900 font-mono">0x{ipPacket.typeOfService.toString(16)}</span></div>
+            <div><span className="font-medium text-gray-700">Total Length:</span> <span className="text-gray-900">{ipPacket.totalLength} bytes</span></div>
+            <div><span className="font-medium text-gray-700">Identification:</span> <span className="text-gray-900 font-mono">0x{ipPacket.identification.toString(16)}</span></div>
+            <div><span className="font-medium text-gray-700">Flags:</span> <span className="text-gray-900 font-mono">0x{ipPacket.flags.toString(16)}</span></div>
+            <div><span className="font-medium text-gray-700">Fragment Offset:</span> <span className="text-gray-900">{ipPacket.fragmentOffset}</span></div>
+            <div><span className="font-medium text-gray-700">Time to Live:</span> <span className="text-gray-900">{ipPacket.timeToLive}</span></div>
+            <div><span className="font-medium text-gray-700">Protocol:</span> <span className="text-gray-900">{ipPacket.protocol} ({NetworkStack.parseIPProtocol(ipPacket.protocol)})</span></div>
+            <div><span className="font-medium text-gray-700">Header Checksum:</span> <span className="text-gray-900 font-mono">0x{ipPacket.headerChecksum.toString(16)}</span></div>
+            <div><span className="font-medium text-gray-700">Source IP:</span> <span className="text-gray-900 font-mono">{ipPacket.sourceIP.address}</span></div>
+            <div><span className="font-medium text-gray-700">Destination IP:</span> <span className="text-gray-900 font-mono">{ipPacket.destinationIP.address}</span></div>
           </div>
         </div>
       )}
@@ -221,21 +217,21 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
   const renderICMPHeader = (icmpPacket: ICMPPacket) => (
     <div className="mb-4">
       <div
-        className="bg-yellow-100 p-2 cursor-pointer flex items-center justify-between"
+        className="bg-yellow-100 p-2 cursor-pointer flex items-center justify-between hover:bg-yellow-200 transition-colors"
         onClick={() => toggleSection('icmp')}
       >
-        <h3 className="font-semibold">ICMP Header</h3>
-        <FaExpand className={`transform ${expandedSections.has('icmp') ? 'rotate-180' : ''}`} />
+        <h3 className="font-semibold text-gray-900">ICMP Header</h3>
+        <FaExpand className={`transform transition-transform ${expandedSections.has('icmp') ? 'rotate-180' : ''} text-gray-700`} />
       </div>
       {expandedSections.has('icmp') && (
         <div className="bg-gray-50 p-3 border border-yellow-200">
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><span className="font-medium">Type:</span> {icmpPacket.type} ({NetworkStack.parseICMPType(icmpPacket.type)})</div>
-            <div><span className="font-medium">Code:</span> {icmpPacket.code}</div>
-            <div><span className="font-medium">Checksum:</span> 0x{icmpPacket.checksum.toString(16)}</div>
-            <div><span className="font-medium">Identifier:</span> {icmpPacket.identifier}</div>
-            <div><span className="font-medium">Sequence Number:</span> {icmpPacket.sequenceNumber}</div>
-            <div><span className="font-medium">Data:</span> {icmpPacket.data}</div>
+            <div><span className="font-medium text-gray-700">Type:</span> <span className="text-gray-900">{icmpPacket.type} ({NetworkStack.parseICMPType(icmpPacket.type)})</span></div>
+            <div><span className="font-medium text-gray-700">Code:</span> <span className="text-gray-900">{icmpPacket.code}</span></div>
+            <div><span className="font-medium text-gray-700">Checksum:</span> <span className="text-gray-900 font-mono">0x{icmpPacket.checksum.toString(16)}</span></div>
+            <div><span className="font-medium text-gray-700">Identifier:</span> <span className="text-gray-900">{icmpPacket.identifier}</span></div>
+            <div><span className="font-medium text-gray-700">Sequence Number:</span> <span className="text-gray-900">{icmpPacket.sequenceNumber}</span></div>
+            <div><span className="font-medium text-gray-700">Data:</span> <span className="text-gray-900">{icmpPacket.data}</span></div>
           </div>
         </div>
       )}
@@ -245,24 +241,24 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
   const renderARPHeader = (arpPacket: ARPPacket) => (
     <div className="mb-4">
       <div
-        className="bg-purple-100 p-2 cursor-pointer flex items-center justify-between"
+        className="bg-purple-100 p-2 cursor-pointer flex items-center justify-between hover:bg-purple-200 transition-colors"
         onClick={() => toggleSection('arp')}
       >
-        <h3 className="font-semibold">ARP Header</h3>
-        <FaExpand className={`transform ${expandedSections.has('arp') ? 'rotate-180' : ''}`} />
+        <h3 className="font-semibold text-gray-900">ARP Header</h3>
+        <FaExpand className={`transform transition-transform ${expandedSections.has('arp') ? 'rotate-180' : ''} text-gray-700`} />
       </div>
       {expandedSections.has('arp') && (
         <div className="bg-gray-50 p-3 border border-purple-200">
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><span className="font-medium">Hardware Type:</span> {arpPacket.hardwareType} (Ethernet)</div>
-            <div><span className="font-medium">Protocol Type:</span> 0x{arpPacket.protocolType.toString(16)} (IPv4)</div>
-            <div><span className="font-medium">Hardware Size:</span> {arpPacket.hardwareSize} bytes</div>
-            <div><span className="font-medium">Protocol Size:</span> {arpPacket.protocolSize} bytes</div>
-            <div><span className="font-medium">Operation:</span> {arpPacket.operation} ({NetworkStack.parseARPOperation(arpPacket.operation)})</div>
-            <div><span className="font-medium">Sender MAC:</span> {arpPacket.senderHardwareAddress.address}</div>
-            <div><span className="font-medium">Sender IP:</span> {arpPacket.senderProtocolAddress.address}</div>
-            <div><span className="font-medium">Target MAC:</span> {arpPacket.targetHardwareAddress.address}</div>
-            <div><span className="font-medium">Target IP:</span> {arpPacket.targetProtocolAddress.address}</div>
+            <div><span className="font-medium text-gray-700">Hardware Type:</span> <span className="text-gray-900">{arpPacket.hardwareType} (Ethernet)</span></div>
+            <div><span className="font-medium text-gray-700">Protocol Type:</span> <span className="text-gray-900 font-mono">0x{arpPacket.protocolType.toString(16)} (IPv4)</span></div>
+            <div><span className="font-medium text-gray-700">Hardware Size:</span> <span className="text-gray-900">{arpPacket.hardwareSize} bytes</span></div>
+            <div><span className="font-medium text-gray-700">Protocol Size:</span> <span className="text-gray-900">{arpPacket.protocolSize} bytes</span></div>
+            <div><span className="font-medium text-gray-700">Operation:</span> <span className="text-gray-900">{arpPacket.operation} ({NetworkStack.parseARPOperation(arpPacket.operation)})</span></div>
+            <div><span className="font-medium text-gray-700">Sender MAC:</span> <span className="text-gray-900 font-mono">{arpPacket.senderHardwareAddress.address}</span></div>
+            <div><span className="font-medium text-gray-700">Sender IP:</span> <span className="text-gray-900 font-mono">{arpPacket.senderProtocolAddress.address}</span></div>
+            <div><span className="font-medium text-gray-700">Target MAC:</span> <span className="text-gray-900 font-mono">{arpPacket.targetHardwareAddress.address}</span></div>
+            <div><span className="font-medium text-gray-700">Target IP:</span> <span className="text-gray-900 font-mono">{arpPacket.targetProtocolAddress.address}</span></div>
           </div>
         </div>
       )}
@@ -284,23 +280,51 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
     const { packet } = selectedPacket;
 
     return (
-      <div className="p-4 overflow-y-auto">
+      <div className="p-4">
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
-          <h2 className="font-semibold mb-2">Packet Trace Information</h2>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><span className="font-medium">Device:</span> {selectedPacket.deviceName} ({selectedPacket.deviceType})</div>
-            <div><span className="font-medium">Action:</span> {selectedPacket.action}</div>
-            <div><span className="font-medium">Timestamp:</span> {formatTimestamp(selectedPacket.timestamp)}</div>
-            <div><span className="font-medium">Step:</span> {selectedPacket.stepNumber}</div>
-            {selectedPacket.incomingInterface && (
-              <div><span className="font-medium">Incoming Interface:</span> {selectedPacket.incomingInterface}</div>
-            )}
-            {selectedPacket.outgoingInterface && (
-              <div><span className="font-medium">Outgoing Interface:</span> {selectedPacket.outgoingInterface}</div>
-            )}
+          <h2 className="font-semibold mb-2 text-gray-900">Step {selectedPacket.stepNumber}: Packet Journey at {selectedPacket.deviceName}</h2>
+          <div className="mb-3 p-2 bg-white rounded border">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-lg">
+                {{
+                  'received': '📥',
+                  'forwarded': '🔄', 
+                  'generated': '📤',
+                  'dropped': '❌',
+                  'processed': '⚙️'
+                }[selectedPacket.action] || '📄'}
+              </span>
+              <span className="font-medium text-gray-900 capitalize">{selectedPacket.action}</span>
+              <span className="text-gray-600">by</span>
+              <span className="font-bold text-blue-600">{selectedPacket.deviceName}</span>
+              <span className="text-gray-500">({selectedPacket.deviceType})</span>
+            </div>
+            <div className="text-sm text-gray-700 italic">{selectedPacket.decision}</div>
           </div>
-          <div className="mt-2">
-            <span className="font-medium">Decision:</span> {selectedPacket.decision}
+          
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="space-y-1">
+              <div><span className="font-medium text-gray-700">Timestamp:</span> <span className="text-gray-900 font-mono text-xs">{formatTimestamp(selectedPacket.timestamp)}</span></div>
+              {selectedPacket.incomingInterface && (
+                <div><span className="font-medium text-gray-700">Incoming Port:</span> <span className="text-gray-900 bg-gray-100 px-2 py-1 rounded font-mono text-xs">{selectedPacket.incomingInterface}</span></div>
+              )}
+              {selectedPacket.outgoingInterface && (
+                <div><span className="font-medium text-gray-700">Outgoing Port:</span> <span className="text-gray-900 bg-gray-100 px-2 py-1 rounded font-mono text-xs">{selectedPacket.outgoingInterface}</span></div>
+              )}
+            </div>
+            <div className="space-y-1">
+              {selectedPacket.incomingInterface && selectedPacket.outgoingInterface && (
+                <div className="bg-green-50 border border-green-200 rounded p-2">
+                  <div className="text-green-800 text-xs font-medium mb-1">Packet Flow:</div>
+                  <div className="text-green-700 font-mono text-xs">{selectedPacket.incomingInterface} → {selectedPacket.deviceName} → {selectedPacket.outgoingInterface}</div>
+                </div>
+              )}
+              {selectedPacket.routingTableUsed && (
+                <div className="bg-orange-50 border border-orange-200 rounded p-2">
+                  <div className="text-orange-800 text-xs font-medium">Used Routing Entry</div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -319,15 +343,15 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
         {selectedPacket.routingTableUsed && (
           <div className="mb-4">
             <div className="bg-indigo-100 p-2">
-              <h3 className="font-semibold">Routing Information Used</h3>
+              <h3 className="font-semibold text-gray-900">Routing Information Used</h3>
             </div>
             <div className="bg-gray-50 p-3 border border-indigo-200">
               <div className="text-sm">
-                <div><span className="font-medium">Destination:</span> {selectedPacket.routingTableUsed.destinationNetwork.address}/{selectedPacket.routingTableUsed.subnetMask}</div>
-                <div><span className="font-medium">Next Hop:</span> {selectedPacket.routingTableUsed.nextHop.address}</div>
-                <div><span className="font-medium">Interface:</span> {selectedPacket.routingTableUsed.interface}</div>
-                <div><span className="font-medium">Metric:</span> {selectedPacket.routingTableUsed.metric}</div>
-                <div><span className="font-medium">Protocol:</span> {selectedPacket.routingTableUsed.protocol}</div>
+                <div><span className="font-medium text-gray-700">Destination:</span> <span className="text-gray-900 font-mono">{selectedPacket.routingTableUsed.destinationNetwork.address}/{selectedPacket.routingTableUsed.subnetMask}</span></div>
+                <div><span className="font-medium text-gray-700">Next Hop:</span> <span className="text-gray-900 font-mono">{selectedPacket.routingTableUsed.nextHop.address}</span></div>
+                <div><span className="font-medium text-gray-700">Interface:</span> <span className="text-gray-900">{selectedPacket.routingTableUsed.interface}</span></div>
+                <div><span className="font-medium text-gray-700">Metric:</span> <span className="text-gray-900">{selectedPacket.routingTableUsed.metric}</span></div>
+                <div><span className="font-medium text-gray-700">Protocol:</span> <span className="text-gray-900">{selectedPacket.routingTableUsed.protocol}</span></div>
               </div>
             </div>
           </div>
@@ -337,10 +361,19 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
   };
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-white max-h-screen">
       {/* Header */}
-      <div className="flex justify-between items-center p-4 border-b border-gray-300">
-        <h2 className="text-xl font-bold">Network Packet Analyzer</h2>
+      <div className="flex justify-between items-center p-3 border-b border-gray-300 bg-gray-50 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-bold text-gray-900">Packet Analyzer</h2>
+          <button
+            onClick={() => setShowHelp(!showHelp)}
+            className="text-blue-500 hover:text-blue-700 transition-colors"
+            title="Show/Hide Help"
+          >
+            <FaInfoCircle className="text-sm" />
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-2 border-r pr-4">
             <input
@@ -348,82 +381,114 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
               placeholder="Filter packets..."
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
             />
             <FaFilter className="text-gray-500" />
           </div>
           
-          <button
-            onClick={isCapturing ? onStopCapture : onStartCapture}
-            className={`px-3 py-1 rounded text-sm flex items-center gap-1 ${
-              isCapturing ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
-            }`}
-          >
-            {isCapturing ? <FaStop /> : <FaPlay />}
-            {isCapturing ? 'Stop' : 'Start'}
-          </button>
-          
-          <button
-            onClick={exportCapture}
-            className="px-3 py-1 bg-blue-500 text-white rounded text-sm flex items-center gap-1"
-            disabled={filteredTraces.length === 0}
-          >
-            <FaDownload />
-            Export
-          </button>
         </div>
       </div>
 
+      {/* Help Section */}
+      {showHelp && (
+        <div className="bg-blue-50 border-b border-blue-200 p-3 text-sm flex-shrink-0">
+          <div className="text-blue-800">
+            <strong className="text-blue-900">📊 Packet Analyzer Guide:</strong>
+            <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="font-medium text-blue-900 mb-1">How to capture packets:</p>
+                <ul className="text-blue-700 space-y-1">
+                  <li>1. Connect devices in the main network view</li>
+                  <li>2. Configure IP addresses on devices</li>
+                  <li>3. Start ping mode and ping between hosts</li>
+                  <li>4. Watch packets appear in the table below</li>
+                </ul>
+              </div>
+              <div>
+                <p className="font-medium text-blue-900 mb-1">What you'll see:</p>
+                <ul className="text-blue-700 space-y-1">
+                  <li>• Complete packet journey step-by-step</li>
+                  <li>• Each device the packet visits</li>
+                  <li>• Routing decisions and forwarding actions</li>
+                  <li>• Protocol details (Ethernet, IP, ICMP, ARP)</li>
+                </ul>
+              </div>
+            </div>
+            <p className="mt-2 text-blue-600">💡 <strong>Tip:</strong> Click on any packet row to see detailed protocol information!</p>
+          </div>
+        </div>
+      )}
+
       {/* Content */}
-      <div className="flex-1 flex">
+      <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Packet List */}
-        <div className="w-1/2 border-r border-gray-300">
-          <div className="bg-gray-100 p-2 border-b border-gray-300">
-            <div className="text-sm font-medium">
+        <div className="w-1/2 border-r border-gray-300 flex flex-col min-h-0">
+          <div className="bg-gray-100 p-2 border-b border-gray-300 flex-shrink-0">
+            <div className="text-sm font-medium text-gray-800">
               Packets: {filteredTraces.length} {filter && `(filtered from ${traces.length})`}
             </div>
           </div>
           
-          <div className="overflow-y-auto h-full">
+          <div className="flex-1 overflow-auto min-h-0">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 sticky top-0">
+              <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
-                  <th className="px-2 py-1 text-left border-b">#</th>
-                  <th className="px-2 py-1 text-left border-b">Time</th>
-                  <th className="px-2 py-1 text-left border-b">Device</th>
-                  <th className="px-2 py-1 text-left border-b">Protocol</th>
-                  <th className="px-2 py-1 text-left border-b">Length</th>
-                  <th className="px-2 py-1 text-left border-b">Info</th>
+                  <th className="px-2 py-2 text-left border-b text-gray-900 font-semibold">#</th>
+                  <th className="px-2 py-2 text-left border-b text-gray-900 font-semibold">Time</th>
+                  <th className="px-2 py-2 text-left border-b text-gray-900 font-semibold">Device</th>
+                  <th className="px-2 py-2 text-left border-b text-gray-900 font-semibold">Protocol</th>
+                  <th className="px-2 py-2 text-left border-b text-gray-900 font-semibold">Length</th>
+                  <th className="px-2 py-2 text-left border-b text-gray-900 font-semibold">Info</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredTraces.map((trace, idx) => (
+                {filteredTraces.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                      <div className="space-y-2">
+                        <p className="text-sm">🔍 No packets to display</p>
+                        <p className="text-xs">Start a ping between devices to see packet traces here</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredTraces.map((trace, idx) => (
                   <tr
                     key={idx}
-                    className={`cursor-pointer hover:bg-blue-50 ${
-                      selectedPacket === trace ? 'bg-blue-100' : ''
+                    className={`cursor-pointer hover:bg-blue-50 transition-colors ${
+                      selectedPacket === trace ? 'bg-blue-100 border-l-4 border-blue-500' : 'border-l-4 border-transparent'
                     }`}
                     onClick={() => setSelectedPacket(trace)}
                   >
-                    <td className="px-2 py-1 border-b">{trace.stepNumber}</td>
-                    <td className="px-2 py-1 border-b">{formatTimestamp(trace.timestamp)}</td>
-                    <td className="px-2 py-1 border-b">{trace.deviceName}</td>
-                    <td className="px-2 py-1 border-b">{getPacketProtocol(trace.packet)}</td>
-                    <td className="px-2 py-1 border-b">{getPacketLength(trace.packet)}</td>
-                    <td className="px-2 py-1 border-b truncate">{getPacketInfo(trace)}</td>
+                    <td className="px-2 py-2 border-b text-gray-900">{trace.stepNumber}</td>
+                    <td className="px-2 py-2 border-b text-gray-700 font-mono text-xs">{formatTimestamp(trace.timestamp)}</td>
+                    <td className="px-2 py-2 border-b text-gray-800 font-medium">{trace.deviceName}</td>
+                    <td className="px-2 py-2 border-b text-gray-700">{getPacketProtocol(trace.packet)}</td>
+                    <td className="px-2 py-2 border-b text-gray-600">{getPacketLength(trace.packet)}</td>
+                    <td className="px-2 py-2 border-b text-gray-700 max-w-0" title={getPacketInfo(trace)}>
+                      <div className="truncate">{getPacketInfo(trace)}</div>
+                      {trace.outgoingInterface && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          {trace.incomingInterface ? `${trace.incomingInterface} → ${trace.outgoingInterface}` : `→ ${trace.outgoingInterface}`}
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <div className='h-[30dvh] w-1.5 bg-amber-200'></div>
         </div>
 
         {/* Packet Details */}
-        <div className="w-1/2">
-          <div className="bg-gray-100 p-2 border-b border-gray-300">
-            <div className="text-sm font-medium">Packet Details</div>
+        <div className="w-1/2 flex flex-col min-h-0">
+          <div className="bg-gray-100 p-2 border-b border-gray-300 flex-shrink-0">
+            <div className="text-sm font-medium text-gray-800">Packet Details</div>
           </div>
-          {renderPacketDetails()}
+          <div className="flex-1 overflow-auto min-h-0">
+            {renderPacketDetails()}
+          </div>
+          <div className='h-[30dvh] w-1.5 bg-amber-200'></div>
         </div>
       </div>
     </div>

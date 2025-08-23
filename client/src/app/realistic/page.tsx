@@ -3,7 +3,7 @@
 import RealisticNetworkFlow from '@/components/RealisticNetworkFlow';
 import Link from 'next/link';
 import { FaHome, FaNetworkWired } from 'react-icons/fa';
-
+import '@/styles/texts.css'
 export default function RealisticLabPage() {
   return (
     <div className="relative min-h-screen bg-gray-900 text-white overflow-hidden">

@@ -32,7 +32,7 @@ export default function Home() {
                 <p className="text-sm">🔧 <strong>Full protocol implementation</strong></p>
                 <p className="text-sm">📡 <strong>Ethernet, IP, ARP, ICMP</strong></p>
                 <p className="text-sm">🔄 <strong>Real packet forwarding</strong></p>
-                <p className="text-sm">📊 <strong>Wireshark-style analysis</strong></p>
+                <p className="text-sm">📊 <strong>Packet analysis</strong></p>
                 <p className="text-sm">⚙️ <strong>CLI device configuration</strong></p>
               </div>
               <div className="flex items-center justify-between text-green-400 group-hover:text-green-300">

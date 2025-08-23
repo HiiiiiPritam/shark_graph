@@ -27,7 +27,7 @@ import { PacketTrace } from '@/lib/network/types';
 import DeviceConfig from './DeviceConfig';
 import PacketAnalyzer from './PacketAnalyzer';
 import { FaDesktop, FaNetworkWired, FaRoute, FaCog, FaPlay, FaBook, FaEye, FaGraduationCap, FaSearch } from 'react-icons/fa';
-import EducationalTutorials from './EducationalTutorials';
+// import EducationalTutorials from './EducationalTutorials';
 import NetworkAnalyzer from './NetworkAnalyzer';
 
 let nodeId = 1;
@@ -134,7 +134,7 @@ export default function RealisticNetworkFlow() {
   const [isCapturing, setIsCapturing] = useState(false);
   const [pingSource, setPingSource] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
-  const [showEducationalTutorials, setShowEducationalTutorials] = useState(false);
+  // const [showEducationalTutorials, setShowEducationalTutorials] = useState(false);
   const [showNetworkAnalyzer, setShowNetworkAnalyzer] = useState(false);
   const [isPingMode, setIsPingMode] = useState(false);
 
@@ -371,11 +371,18 @@ export default function RealisticNetworkFlow() {
       }
       
       try {
+        console.log(`🎯 UI: Starting ping from ${sourceId} to ${targetIP}`);
         const traces = await simulator.ping(sourceId, targetIP);
-        setPacketTraces(prev => [...prev, ...traces]);
+        console.log(`🎯 UI: simulator.ping() returned ${traces.length} traces:`, traces);
+        
+        setPacketTraces(prev => {
+          const newTraces = [...prev, ...traces];
+          console.log(`🎯 UI: Setting packet traces - Previous: ${prev.length}, New: ${traces.length}, Total: ${newTraces.length}`);
+          return newTraces;
+        });
         
         if (traces.length > 0) {
-          alert(`✅ Ping successful from ${sourceHost.name} (${sourceIP}) to ${targetHost.name} (${targetIP})`);
+          alert(`✅ Ping successful from ${sourceHost.name} (${sourceIP}) to ${targetHost.name} (${targetIP}) - ${traces.length} traces collected`);
         } else {
           alert(`❌ Ping failed from ${sourceHost.name} (${sourceIP}) to ${targetHost.name} (${targetIP}). Check network connectivity and routing.`);
         }
@@ -487,12 +494,12 @@ export default function RealisticNetworkFlow() {
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-4xl max-h-4/5 overflow-y-auto">
+        <div className="bg-white text-gray-900 rounded-lg p-6 max-w-4xl max-h-4/5 overflow-y-auto">
           <h2 className="text-2xl font-bold mb-4">Network Simulation Tutorial</h2>
           
           <div className="space-y-6">
             <section>
-              <h3 className="text-xl font-semibold mb-2">Getting Started</h3>
+              <h3 className="text-xl font-semibold mb-2 text-gray-900">Getting Started</h3>
               <p className="text-gray-700">
                 This is a realistic network simulator that mimics how real networks operate.
                 Unlike the Docker version, this simulation implements actual networking protocols
@@ -501,25 +508,25 @@ export default function RealisticNetworkFlow() {
             </section>
 
             <section>
-              <h3 className="text-xl font-semibold mb-2">Device Types</h3>
+              <h3 className="text-xl font-semibold mb-2 text-gray-900">Device Types</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="border p-3 rounded">
+                <div className="border border-gray-300 p-3 rounded bg-white">
                   <h4 className="font-semibold text-blue-600">🖥️ Hosts</h4>
-                  <p className="text-sm">End devices like computers. They have IP addresses and can send/receive data.</p>
+                  <p className="text-sm text-gray-700">End devices like computers. They have IP addresses and can send/receive data.</p>
                 </div>
-                <div className="border p-3 rounded">
+                <div className="border border-gray-300 p-3 rounded bg-white">
                   <h4 className="font-semibold text-green-600">🔌 Switches</h4>
-                  <p className="text-sm">Layer 2 devices that learn MAC addresses and forward frames within a network segment.</p>
+                  <p className="text-sm text-gray-700">Layer 2 devices that learn MAC addresses and forward frames within a network segment.</p>
                 </div>
-                <div className="border p-3 rounded">
+                <div className="border border-gray-300 p-3 rounded bg-white">
                   <h4 className="font-semibold text-orange-600">🛤️ Routers</h4>
-                  <p className="text-sm">Layer 3 devices that route packets between different networks using IP addresses.</p>
+                  <p className="text-sm text-gray-700">Layer 3 devices that route packets between different networks using IP addresses.</p>
                 </div>
               </div>
             </section>
 
             <section>
-              <h3 className="text-xl font-semibold mb-2">How to Use</h3>
+              <h3 className="text-xl font-semibold mb-2 text-gray-900">How to Use</h3>
               <ol className="list-decimal list-inside space-y-2 text-gray-700">
                 <li><strong>Add devices:</strong> Click the device buttons to add hosts, switches, or routers</li>
                 <li><strong>Connect devices:</strong> Drag from one device to another to create a link</li>
@@ -530,10 +537,10 @@ export default function RealisticNetworkFlow() {
             </section>
 
             <section>
-              <h3 className="text-xl font-semibold mb-2">Network Protocols Implemented</h3>
+              <h3 className="text-xl font-semibold mb-2 text-gray-900">Network Protocols Implemented</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h4 className="font-semibold">Layer 2 (Data Link)</h4>
+                  <h4 className="font-semibold text-gray-800">Layer 2 (Data Link)</h4>
                   <ul className="text-sm text-gray-600">
                     <li>• Ethernet frames</li>
                     <li>• MAC address learning</li>
@@ -541,7 +548,7 @@ export default function RealisticNetworkFlow() {
                   </ul>
                 </div>
                 <div>
-                  <h4 className="font-semibold">Layer 3 (Network)</h4>
+                  <h4 className="font-semibold text-gray-800">Layer 3 (Network)</h4>
                   <ul className="text-sm text-gray-600">
                     <li>• IP packet routing</li>
                     <li>• ARP resolution</li>
@@ -553,22 +560,22 @@ export default function RealisticNetworkFlow() {
             </section>
 
             <section>
-              <h3 className="text-xl font-semibold mb-2">Clean Testing Environment!</h3>
+              <h3 className="text-xl font-semibold mb-2 text-gray-900">Clean Testing Environment!</h3>
               <p className="text-gray-700 mb-2">
                 Sample devices are provided but NOT connected. You must build your network from scratch:
               </p>
               <div className="bg-gray-100 p-4 rounded text-sm">
-                <div className="mb-2"><strong>Available Devices:</strong></div>
-                <div>• PC-1, PC-2, PC-3 (hosts - need IP configuration)</div>
-                <div>• Switch-1 (8 ports - ready for connections)</div>
-                <div>• Router-1 (multiple interfaces - needs IP configuration)</div>
+                <div className="mb-2 text-gray-800"><strong>Available Devices:</strong></div>
+                <div className="text-gray-700">• PC-1, PC-2, PC-3 (hosts - need IP configuration)</div>
+                <div className="text-gray-700">• Switch-1 (8 ports - ready for connections)</div>
+                <div className="text-gray-700">• Router-1 (multiple interfaces - needs IP configuration)</div>
                 
-                <div className="mt-3 mb-2"><strong>Step-by-step setup:</strong></div>
-                <div>1. <strong>Connect:</strong> Drag from PC-1 to Switch-1</div>
-                <div>2. <strong>Connect:</strong> Drag from PC-2 to Switch-1</div>
-                <div>3. <strong>Configure:</strong> Double-click PC-1 → CLI → "ip eth0 192.168.1.10 255.255.255.0"</div>
-                <div>4. <strong>Configure:</strong> Double-click PC-2 → CLI → "ip eth0 192.168.1.11 255.255.255.0"</div>
-                <div>5. <strong>Test:</strong> Start Ping Mode → Click PC-1 → Click PC-2</div>
+                <div className="mt-3 mb-2 text-gray-800"><strong>Step-by-step setup:</strong></div>
+                <div className="text-gray-700">1. <strong className="text-gray-900">Connect:</strong> Drag from PC-1 to Switch-1</div>
+                <div className="text-gray-700">2. <strong className="text-gray-900">Connect:</strong> Drag from PC-2 to Switch-1</div>
+                <div className="text-gray-700">3. <strong className="text-gray-900">Configure:</strong> Double-click PC-1 → CLI → "ip eth0 192.168.1.10 255.255.255.0"</div>
+                <div className="text-gray-700">4. <strong className="text-gray-900">Configure:</strong> Double-click PC-2 → CLI → "ip eth0 192.168.1.11 255.255.255.0"</div>
+                <div className="text-gray-700">5. <strong className="text-gray-900">Test:</strong> Start Ping Mode → Click PC-1 → Click PC-2</div>
               </div>
               <p className="text-sm text-gray-600 mt-2">
                 <strong>Result:</strong> ✅ Ping should work between connected, configured devices!
@@ -634,12 +641,12 @@ export default function RealisticNetworkFlow() {
           >
             <FaBook /> Quick Guide
           </button>
-          <button
+          {/* <button
             onClick={() => setShowEducationalTutorials(true)}
             className="px-3 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 flex items-center gap-2"
           >
             <FaGraduationCap /> Learn
-          </button>
+          </button> */}
           <button
             onClick={() => setShowNetworkAnalyzer(true)}
             className="px-3 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 flex items-center gap-2"
@@ -656,17 +663,17 @@ export default function RealisticNetworkFlow() {
       </div>
 
       {/* Info Bar */}
-      <div className="bg-gray-700 p-2 text-white text-sm">
+      <div className="bg-gray-700 p-2 text-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             {!pingSource ? (
               <>
-                <span>🔗 NO CONNECTIONS: Drag from device to device to create links</span>
-                <span>⚙️ NO IPs: Double-click device → CLI → "ip eth0 192.168.1.10 255.255.255.0"</span>
+                <span className="text-white">🔗 NO CONNECTIONS: Drag from device to device to create links</span>
+                <span className="text-white">⚙️ NO IPs: Double-click device → CLI → "ip eth0 192.168.1.10 255.255.255.0"</span>
                 {isPingMode ? (
                   <span className="text-yellow-300">📡 PING MODE: Click source host, then target host</span>
                 ) : (
-                  <span>🎯 After connecting & configuring, use "Start Ping Mode"</span>
+                  <span className="text-white">🎯 After connecting & configuring, use "Start Ping Mode"</span>
                 )}
               </>
             ) : (
@@ -674,15 +681,15 @@ export default function RealisticNetworkFlow() {
             )}
           </div>
           <div className="flex items-center gap-4">
-            <span>Devices: {nodes.length}</span>
-            <span>Links: {edges.length}</span>
+            <span className="text-white">Devices: {nodes.length}</span>
+            <span className="text-white">Links: {edges.length}</span>
             {pingSource && (
               <button 
                 onClick={() => {
                   setPingSource(null);
                   setIsPingMode(false);
                 }}
-                className="text-red-300 hover:text-red-100"
+                className="text-red-300 hover:text-red-100 transition-colors"
               >
                 ❌ Cancel Ping
               </button>
@@ -721,6 +728,13 @@ export default function RealisticNetworkFlow() {
               onStopCapture={stopPacketCapture}
               isCapturing={isCapturing}
             />
+            <div className="hidden">
+              {/* Debug info */}
+              {(() => {
+                console.log(`🎯 UI: Rendering PacketAnalyzer with ${packetTraces.length} traces`);
+                return null;
+              })()}
+            </div>
           </div>
         )}
       </div>
@@ -741,9 +755,9 @@ export default function RealisticNetworkFlow() {
       {renderTutorial()}
 
       {/* Educational Tutorials */}
-      {showEducationalTutorials && (
+      {/* {showEducationalTutorials && (
         <EducationalTutorials onClose={() => setShowEducationalTutorials(false)} />
-      )}
+      )} */}
 
       {/* Network Analyzer */}
       {showNetworkAnalyzer && (

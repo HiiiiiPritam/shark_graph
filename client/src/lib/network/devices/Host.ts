@@ -108,20 +108,6 @@ export class Host implements HostInterface {
   async receiveFrame(frame: EthernetFrame, incomingInterface: string): Promise<void> {
     if (this.status === 'down') return;
 
-    const trace: PacketTrace = {
-      stepNumber: this.packetTracer.getNextStepNumber(),
-      deviceId: this.id,
-      deviceName: this.name,
-      deviceType: 'host',
-      action: 'received',
-      incomingInterface,
-      packet: frame,
-      timestamp: Date.now(),
-      decision: `Frame received on interface ${incomingInterface}`,
-    };
-    
-    this.packetTracer.addTrace(trace);
-
     // Check if frame is for us
     const iface = this.interfaces.find(i => i.name === incomingInterface);
     if (!iface) return;
@@ -131,18 +117,6 @@ export class Host implements HostInterface {
 
     if (!isForUs) {
       // Not for us, drop it
-      const dropTrace: PacketTrace = {
-        stepNumber: this.packetTracer.getNextStepNumber(),
-        deviceId: this.id,
-        deviceName: this.name,
-        deviceType: 'host',
-        action: 'dropped',
-        incomingInterface,
-        packet: frame,
-        timestamp: Date.now(),
-        decision: `Frame not destined for this host (MAC: ${frame.destinationMac.address})`,
-      };
-      this.packetTracer.addTrace(dropTrace);
       return;
     }
 
@@ -156,7 +130,7 @@ export class Host implements HostInterface {
     }
   }
 
-  async sendPing(destinationIP: string): Promise<PacketTrace[]> {
+  async sendPing(destinationIP: string): Promise<void> {
     const dest: IPAddress = { address: destinationIP, subnet: '' };
     
     // Create ICMP Echo Request
@@ -193,12 +167,11 @@ export class Host implements HostInterface {
       timestamp: Date.now(),
     };
 
-    // Send the packet
-    this.packetTracer.clearTraces(); // Start fresh tracing
-    return await this.sendIPPacket(ipPacket, sourceInterface.name);
+    // Send the packet through network simulator
+    await this.sendIPPacket(ipPacket, sourceInterface.name);
   }
 
-  async sendIPPacket(packet: IPPacket, outgoingInterface: string): Promise<PacketTrace[]> {
+  async sendIPPacket(packet: IPPacket, outgoingInterface: string): Promise<void> {
     // Find next hop
     const nextHop = this.findNextHop(packet.destinationIP);
     if (!nextHop) {
@@ -230,27 +203,8 @@ export class Host implements HostInterface {
       timestamp: Date.now(),
     };
 
-    const trace: PacketTrace = {
-      stepNumber: this.packetTracer.getNextStepNumber(),
-      deviceId: this.id,
-      deviceName: this.name,
-      deviceType: 'host',
-      action: 'forwarded',
-      outgoingInterface,
-      packet: frame,
-      timestamp: Date.now(),
-      decision: `Forwarding to next hop ${nextHop.address} via ${outgoingInterface}`,
-      routingTableUsed: this.routingTable.find(r => 
-        this.isIPInNetwork(nextHop, r.destinationNetwork, r.subnetMask)
-      ),
-    };
-    
-    this.packetTracer.addTrace(trace);
-
     // Send frame to connected device (simulation)
     await this.transmitFrame(frame, outgoingInterface);
-    
-    return this.packetTracer.getTraces();
   }
 
   // ARP Protocol Implementation

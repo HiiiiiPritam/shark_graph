@@ -99,7 +99,10 @@ export class NetworkStack {
   }
 
   // Protocol parsing helpers
-  static parseEtherType(etherType: number): string {
+  static parseEtherType(etherType: number | undefined): string {
+    if (etherType === undefined || etherType === null) {
+      return 'Unknown';
+    }
     switch (etherType) {
       case 0x0800: return 'IPv4';
       case 0x0806: return 'ARP';
@@ -109,7 +112,10 @@ export class NetworkStack {
     }
   }
 
-  static parseIPProtocol(protocol: number): string {
+  static parseIPProtocol(protocol: number | undefined): string {
+    if (protocol === undefined || protocol === null) {
+      return 'Unknown';
+    }
     switch (protocol) {
       case 1: return 'ICMP';
       case 2: return 'IGMP';
@@ -124,7 +130,10 @@ export class NetworkStack {
     }
   }
 
-  static parseICMPType(type: number): string {
+  static parseICMPType(type: number | undefined): string {
+    if (type === undefined || type === null) {
+      return 'Unknown';
+    }
     switch (type) {
       case 0: return 'Echo Reply';
       case 3: return 'Destination Unreachable';
@@ -141,7 +150,10 @@ export class NetworkStack {
     }
   }
 
-  static parseARPOperation(operation: number): string {
+  static parseARPOperation(operation: number | undefined): string {
+    if (operation === undefined || operation === null) {
+      return 'Unknown';
+    }
     switch (operation) {
       case 1: return 'Request';
       case 2: return 'Reply';

@@ -6,7 +6,7 @@ import { FaHome, FaDesktop } from 'react-icons/fa';
 
 export default function SimulationPage() {
   return (
-    <div className="relative min-h-screen bg-gray-900 text-white overflow-hidden">
+    <div className="relative min-h-screen bg-gray-900 text-black overflow-auto">
       {/* Navigation Bar */}
       <nav className="bg-gray-800 p-4 flex items-center justify-between">
         <div className="flex items-center gap-4">

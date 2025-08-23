@@ -116,47 +116,19 @@ export class Router implements RouterInterface {
   }
 
   // Packet Processing - Core Router Functionality
-  async receiveFrame(frame: EthernetFrame, incomingInterface: string): Promise<PacketTrace[]> {
-    if (this.status === 'down') return [];
-    
-    this.packetTracer.clearTraces();
-
-    const trace: PacketTrace = {
-      stepNumber: this.packetTracer.getNextStepNumber(),
-      deviceId: this.id,
-      deviceName: this.name,
-      deviceType: 'router',
-      action: 'received',
-      incomingInterface,
-      packet: frame,
-      timestamp: Date.now(),
-      decision: `Frame received on interface ${incomingInterface}`,
-    };
-    
-    this.packetTracer.addTrace(trace);
+  async receiveFrame(frame: EthernetFrame, incomingInterface: string): Promise<void> {
+    if (this.status === 'down') return;
 
     // Check if frame is for us (MAC address check)
     const iface = this.interfaces.find(i => i.name === incomingInterface);
-    if (!iface) return this.packetTracer.getTraces();
+    if (!iface) return;
 
     const isForUs = frame.destinationMac.address === iface.macAddress.address ||
                     frame.destinationMac.address === 'ff:ff:ff:ff:ff:ff'; // Broadcast
 
     if (!isForUs) {
       // Not for us, drop it
-      const dropTrace: PacketTrace = {
-        stepNumber: this.packetTracer.getNextStepNumber(),
-        deviceId: this.id,
-        deviceName: this.name,
-        deviceType: 'router',
-        action: 'dropped',
-        incomingInterface,
-        packet: frame,
-        timestamp: Date.now(),
-        decision: `Frame not destined for this router (MAC: ${frame.destinationMac.address})`,
-      };
-      this.packetTracer.addTrace(dropTrace);
-      return this.packetTracer.getTraces();
+      return;
     }
 
     // Process based on EtherType
@@ -167,8 +139,6 @@ export class Router implements RouterInterface {
       // IPv4
       await this.processIPPacket(frame.payload as IPPacket, incomingInterface);
     }
-
-    return this.packetTracer.getTraces();
   }
 
   // IP Packet Processing

@@ -400,35 +400,35 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
   };
 
   const renderInterfaces = () => (
-    <div>
-      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+    <div className="text-gray-900">
+      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-800">
         <FaNetworkWired /> Interface Configuration
       </h3>
       <div className="space-y-4">
         {device.interfaces.map(iface => (
-          <div key={iface.id} className="border border-gray-300 rounded-lg p-4">
+          <div key={iface.id} className="border border-gray-300 rounded-lg p-4 bg-gray-50">
             <div className="flex justify-between items-center mb-2">
-              <h4 className="font-medium">{iface.name}</h4>
+              <h4 className="font-medium text-gray-800">{iface.name}</h4>
               <span className={`px-2 py-1 rounded text-sm ${
                 iface.isUp ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
               }`}>
                 {iface.isUp ? 'UP' : 'DOWN'}
               </span>
             </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
               <div>
-                <span className="font-medium">MAC Address:</span> {iface.macAddress.address}
+                <span className="font-medium text-gray-800">MAC Address:</span> {iface.macAddress.address}
               </div>
               <div>
-                <span className="font-medium">Speed:</span> {iface.speed} Mbps
+                <span className="font-medium text-gray-800">Speed:</span> {iface.speed} Mbps
               </div>
               <div>
-                <span className="font-medium">IP Address:</span> {
+                <span className="font-medium text-gray-800">IP Address:</span> {
                   iface.ipAddress ? `${iface.ipAddress.address}/${iface.ipAddress.subnet}` : 'Not configured'
                 }
               </div>
               <div>
-                <span className="font-medium">Connected To:</span> {iface.connectedTo || 'Not connected'}
+                <span className="font-medium text-gray-800">Connected To:</span> {iface.connectedTo || 'Not connected'}
               </div>
             </div>
           </div>
@@ -444,9 +444,9 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
     const routes = router.showRoutingTable();
 
     return (
-      <div>
+      <div className="text-gray-900">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
+          <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
             <FaCog /> Routing Table
           </h3>
           <button
@@ -461,23 +461,23 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
           <table className="min-w-full border border-gray-300">
             <thead className="bg-gray-100">
               <tr>
-                <th className="px-4 py-2 text-left">Destination</th>
-                <th className="px-4 py-2 text-left">Gateway</th>
-                <th className="px-4 py-2 text-left">Interface</th>
-                <th className="px-4 py-2 text-left">Metric</th>
-                <th className="px-4 py-2 text-left">Protocol</th>
+                <th className="px-4 py-2 text-left text-gray-800">Destination</th>
+                <th className="px-4 py-2 text-left text-gray-800">Gateway</th>
+                <th className="px-4 py-2 text-left text-gray-800">Interface</th>
+                <th className="px-4 py-2 text-left text-gray-800">Metric</th>
+                <th className="px-4 py-2 text-left text-gray-800">Protocol</th>
               </tr>
             </thead>
             <tbody>
               {routes.map((route, idx) => (
                 <tr key={idx} className="border-t">
-                  <td className="px-4 py-2">{route.destinationNetwork.address}/{route.subnetMask}</td>
-                  <td className="px-4 py-2">
+                  <td className="px-4 py-2 text-gray-700">{route.destinationNetwork.address}/{route.subnetMask}</td>
+                  <td className="px-4 py-2 text-gray-700">
                     {route.nextHop.address === '0.0.0.0' ? 'Connected' : route.nextHop.address}
                   </td>
-                  <td className="px-4 py-2">{route.interface}</td>
-                  <td className="px-4 py-2">{route.metric}</td>
-                  <td className="px-4 py-2">
+                  <td className="px-4 py-2 text-gray-700">{route.interface}</td>
+                  <td className="px-4 py-2 text-gray-700">{route.metric}</td>
+                  <td className="px-4 py-2 text-gray-700">
                     <span className={`px-2 py-1 rounded text-xs ${
                       route.protocol === 'connected' ? 'bg-blue-100 text-blue-800' :
                       route.protocol === 'static' ? 'bg-green-100 text-green-800' :
@@ -503,8 +503,8 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
       (device as Router).showARPTable();
 
     return (
-      <div>
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+      <div className="text-gray-900">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-800">
           <FaInfo /> ARP Table
         </h3>
         
@@ -512,27 +512,27 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
           <table className="min-w-full border border-gray-300">
             <thead className="bg-gray-100">
               <tr>
-                <th className="px-4 py-2 text-left">IP Address</th>
-                <th className="px-4 py-2 text-left">MAC Address</th>
-                <th className="px-4 py-2 text-left">Interface</th>
-                <th className="px-4 py-2 text-left">Type</th>
-                <th className="px-4 py-2 text-left">Age</th>
+                <th className="px-4 py-2 text-left text-gray-800">IP Address</th>
+                <th className="px-4 py-2 text-left text-gray-800">MAC Address</th>
+                <th className="px-4 py-2 text-left text-gray-800">Interface</th>
+                <th className="px-4 py-2 text-left text-gray-800">Type</th>
+                <th className="px-4 py-2 text-left text-gray-800">Age</th>
               </tr>
             </thead>
             <tbody>
               {arpTable.map((entry, idx) => (
                 <tr key={idx} className="border-t">
-                  <td className="px-4 py-2">{entry.ipAddress.address}</td>
-                  <td className="px-4 py-2 font-mono">{entry.macAddress.address}</td>
-                  <td className="px-4 py-2">{entry.interface}</td>
-                  <td className="px-4 py-2">
+                  <td className="px-4 py-2 text-gray-700">{entry.ipAddress.address}</td>
+                  <td className="px-4 py-2 font-mono text-gray-700">{entry.macAddress.address}</td>
+                  <td className="px-4 py-2 text-gray-700">{entry.interface}</td>
+                  <td className="px-4 py-2 text-gray-700">
                     <span className={`px-2 py-1 rounded text-xs ${
                       entry.type === 'static' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
                     }`}>
                       {entry.type.toUpperCase()}
                     </span>
                   </td>
-                  <td className="px-4 py-2">{entry.age}s</td>
+                  <td className="px-4 py-2 text-gray-700">{entry.age}s</td>
                 </tr>
               ))}
             </tbody>
@@ -549,8 +549,8 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
     const macTable = switchDevice.showMACTable();
 
     return (
-      <div>
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+      <div className="text-gray-900">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-800">
           <FaInfo /> MAC Address Table
         </h3>
         
@@ -558,27 +558,27 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
           <table className="min-w-full border border-gray-300">
             <thead className="bg-gray-100">
               <tr>
-                <th className="px-4 py-2 text-left">MAC Address</th>
-                <th className="px-4 py-2 text-left">VLAN</th>
-                <th className="px-4 py-2 text-left">Port</th>
-                <th className="px-4 py-2 text-left">Type</th>
-                <th className="px-4 py-2 text-left">Age</th>
+                <th className="px-4 py-2 text-left text-gray-800">MAC Address</th>
+                <th className="px-4 py-2 text-left text-gray-800">VLAN</th>
+                <th className="px-4 py-2 text-left text-gray-800">Port</th>
+                <th className="px-4 py-2 text-left text-gray-800">Type</th>
+                <th className="px-4 py-2 text-left text-gray-800">Age</th>
               </tr>
             </thead>
             <tbody>
               {macTable.map((entry, idx) => (
                 <tr key={idx} className="border-t">
-                  <td className="px-4 py-2 font-mono">{entry.macAddress.address}</td>
-                  <td className="px-4 py-2">{entry.vlan}</td>
-                  <td className="px-4 py-2">{entry.port}</td>
-                  <td className="px-4 py-2">
+                  <td className="px-4 py-2 font-mono text-gray-700">{entry.macAddress.address}</td>
+                  <td className="px-4 py-2 text-gray-700">{entry.vlan}</td>
+                  <td className="px-4 py-2 text-gray-700">{entry.port}</td>
+                  <td className="px-4 py-2 text-gray-700">
                     <span className={`px-2 py-1 rounded text-xs ${
                       entry.type === 'static' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
                     }`}>
                       {entry.type.toUpperCase()}
                     </span>
                   </td>
-                  <td className="px-4 py-2">{entry.age}s</td>
+                  <td className="px-4 py-2 text-gray-700">{entry.age}s</td>
                 </tr>
               ))}
             </tbody>
@@ -589,12 +589,12 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
   };
 
   const renderCLI = () => (
-    <div>
-      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+    <div className="text-gray-900">
+      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-800">
         <FaTerminal /> Command Line Interface
       </h3>
       
-      <div className="bg-black text-green-400 font-mono text-sm p-4 rounded-lg h-96 overflow-y-auto mb-4">
+      <div className="bg-gray-900 text-green-400 font-mono text-sm p-4 rounded-lg h-96 overflow-y-auto mb-4">
         {cliOutput.map((line, idx) => (
           <div key={idx} className="whitespace-pre-wrap">{line}</div>
         ))}
@@ -602,14 +602,14 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
       
       <form onSubmit={handleCLISubmit} className="flex gap-2">
         <div className="flex-1 flex">
-          <span className="bg-gray-100 px-3 py-2 border border-r-0 border-gray-300 rounded-l font-mono text-sm">
+          <span className="bg-gray-100 px-3 py-2 border border-r-0 border-gray-300 rounded-l font-mono text-sm text-gray-800">
             {device.name}#
           </span>
           <input
             type="text"
             value={cliInput}
             onChange={(e) => setCLIInput(e.target.value)}
-            className="flex-1 px-3 py-2 border border-l-0 border-gray-300 rounded-r focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+            className="flex-1 px-3 py-2 border border-l-0 border-gray-300 rounded-r focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm text-gray-900"
             placeholder="Enter command..."
             autoFocus
           />

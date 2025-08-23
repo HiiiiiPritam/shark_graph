@@ -139,6 +139,8 @@ export default function RealisticNetworkFlow() {
   const [isPingMode, setIsPingMode] = useState(false);
 
   useEffect(() => {
+    // Clear any existing devices to prevent ID conflicts
+    simulator.clear();
     simulator.start();
     
     // Create a simple demo network
@@ -146,6 +148,8 @@ export default function RealisticNetworkFlow() {
     
     return () => {
       simulator.stop();
+      // Clear the simulator when component unmounts to prevent conflicts
+      simulator.clear();
     };
   }, []);
 
@@ -591,6 +595,7 @@ export default function RealisticNetworkFlow() {
       <div className="bg-gray-800 p-4 flex justify-between items-center">
         <div className="flex items-center gap-4">
           <h1 className="text-white text-xl font-bold">Realistic Network Simulator</h1>
+          <span className="text-green-400 text-sm px-2 py-1 bg-green-900 rounded">Isolated Environment</span>
           <div className="flex items-center gap-2">
             <button
               onClick={addHost}

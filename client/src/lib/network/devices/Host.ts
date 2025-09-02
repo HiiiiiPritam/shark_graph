@@ -68,7 +68,7 @@ export class Host implements HostInterface {
       macAddress,
       ipAddress,
       isUp: true,
-      speed: 100, // 100 Mbps default
+      speed: 100,
       connectedTo: undefined,
     };
     

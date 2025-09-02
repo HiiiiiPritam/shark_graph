@@ -9,16 +9,18 @@ export class NetworkStack {
   }
 
   // Network utility functions
-  static calculateSubnetMask(prefixLength: number): string {
-    const mask = (0xffffffff << (32 - prefixLength)) >>> 0;
-    return [
-      (mask >>> 24) & 0xff,
-      (mask >>> 16) & 0xff,
-      (mask >>> 8) & 0xff,
-      mask & 0xff
-    ].join('.');
-  }
-
+  //remove
+  // static calculateSubnetMask(prefixLength: number): string {
+  //   const mask = (0xffffffff << (32 - prefixLength)) >>> 0;
+  //   return [
+  //     (mask >>> 24) & 0xff,
+  //     (mask >>> 16) & 0xff,
+  //     (mask >>> 8) & 0xff,
+  //     mask & 0xff
+  //   ].join('.');
+  // }
+ //
+  //255.255.255.0 → 24
   static getPrefixLength(subnetMask: string): number {
     return subnetMask.split('.')
       .map(octet => parseInt(octet))
@@ -44,11 +46,12 @@ export class NetworkStack {
     return ipParts.map((part, i) => part & maskParts[i]).join('.');
   }
 
-  static calculateBroadcastAddress(ip: string, subnetMask: string): string {
-    const ipParts = ip.split('.').map(Number);
-    const maskParts = subnetMask.split('.').map(Number);
-    return ipParts.map((part, i) => part | (255 - maskParts[i])).join('.');
-  }
+  //removed
+  // static calculateBroadcastAddress(ip: string, subnetMask: string): string {
+  //   const ipParts = ip.split('.').map(Number);
+  //   const maskParts = subnetMask.split('.').map(Number);
+  //   return ipParts.map((part, i) => part | (255 - maskParts[i])).join('.');
+  // }
 
   static isInSameNetwork(ip1: string, ip2: string, subnetMask: string): boolean {
     const network1 = NetworkStack.calculateNetworkAddress(ip1, subnetMask);
@@ -56,13 +59,14 @@ export class NetworkStack {
     return network1 === network2;
   }
 
-  static generateRandomIP(network: string = '192.168.1', hostPart?: number): IPAddress {
-    const host = hostPart || Math.floor(Math.random() * 254) + 1;
-    return {
-      address: `${network}.${host}`,
-      subnet: '255.255.255.0'
-    };
-  }
+  //removed
+  // static generateRandomIP(network: string = '192.168.1', hostPart?: number): IPAddress {
+  //   const host = hostPart || Math.floor(Math.random() * 254) + 1;
+  //   return {
+  //     address: `${network}.${host}`,
+  //     subnet: '255.255.255.0'
+  //   };
+  // }
 
   static generateRandomMAC(): MACAddress {
     const hex = '0123456789ABCDEF';
@@ -76,27 +80,29 @@ export class NetworkStack {
   }
 
   // Checksum calculations
-  static calculateIPChecksum(header: number[]): number {
-    let sum = 0;
+  //removed
+  // static calculateIPChecksum(header: number[]): number {
+  //   let sum = 0;
     
-    // Sum all 16-bit words
-    for (let i = 0; i < header.length; i += 2) {
-      const word = (header[i] << 8) + (header[i + 1] || 0);
-      sum += word;
-    }
+  //   // Sum all 16-bit words
+  //   for (let i = 0; i < header.length; i += 2) {
+  //     const word = (header[i] << 8) + (header[i + 1] || 0);
+  //     sum += word;
+  //   }
     
-    // Add carry bits
-    while (sum >> 16) {
-      sum = (sum & 0xFFFF) + (sum >> 16);
-    }
+  //   // Add carry bits
+  //   while (sum >> 16) {
+  //     sum = (sum & 0xFFFF) + (sum >> 16);
+  //   }
     
-    // One's complement
-    return (~sum) & 0xFFFF;
-  }
+  //   // One's complement
+  //   return (~sum) & 0xFFFF;
+  // }
 
-  static calculateICMPChecksum(packet: number[]): number {
-    return NetworkStack.calculateIPChecksum(packet);
-  }
+  //removed
+  // static calculateICMPChecksum(packet: number[]): number {
+  //   return NetworkStack.calculateIPChecksum(packet);
+  // }
 
   // Protocol parsing helpers
   static parseEtherType(etherType: number | undefined): string {
@@ -168,18 +174,21 @@ export class NetworkStack {
     return new Date(timestamp).toISOString();
   }
 
-  static formatBytes(bytes: number): string {
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    if (bytes === 0) return '0 Bytes';
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
-  }
 
-  static formatLatency(ms: number): string {
-    if (ms < 1) return `${(ms * 1000).toFixed(2)} μs`;
-    if (ms < 1000) return `${ms.toFixed(2)} ms`;
-    return `${(ms / 1000).toFixed(2)} s`;
-  }
+  //removed
+  // static formatBytes(bytes: number): string {
+  //   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  //   if (bytes === 0) return '0 Bytes';
+  //   const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  //   return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+  // }
+
+  //removed
+  // static formatLatency(ms: number): string {
+  //   if (ms < 1) return `${(ms * 1000).toFixed(2)} μs`;
+  //   if (ms < 1000) return `${ms.toFixed(2)} ms`;
+  //   return `${(ms / 1000).toFixed(2)} s`;
+  // }
 
   // Network analysis utilities
   static analyzePacketFlow(traces: any[]): {

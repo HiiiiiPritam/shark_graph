@@ -41,7 +41,7 @@ const HostNode = ({ data }: any) => {
   const subnet = primaryInterface?.ipAddress?.subnet;
   
   return (
-    <div className="px-4 py-2 shadow-lg rounded-lg bg-blue-100 border-2 border-blue-500 min-w-32 text-center relative">
+    <div className="px-2 sm:px-4 py-1 sm:py-2 shadow-lg rounded-lg bg-blue-100 border-2 border-blue-500 min-w-24 sm:min-w-32 text-center relative">
       <Handle 
         type="target" 
         position={Position.Top} 
@@ -69,13 +69,13 @@ const HostNode = ({ data }: any) => {
       
       <div className="flex items-center justify-center gap-2">
         <FaDesktop className="text-blue-600" />
-        <div className="font-bold text-blue-800">{data.label}</div>
+        <div className="font-bold text-blue-900">{data.label}</div>
       </div>
-      <div className="text-xs text-gray-600 mt-1">
-        {ipAddress ? `${ipAddress}` : 'No IP configured'}
+      <div className="text-xs text-gray-700 mt-1 font-medium">
+        {ipAddress ? `${ipAddress}` : 'No IP'}
       </div>
       {subnet && (
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-gray-600 font-medium">
           {subnet}
         </div>
       )}
@@ -84,7 +84,7 @@ const HostNode = ({ data }: any) => {
 };
 
 const SwitchNode = ({ data }: any) => (
-  <div className="px-4 py-2 shadow-lg rounded-lg bg-green-100 border-2 border-green-500 min-w-24 text-center relative">
+  <div className="px-2 sm:px-4 py-1 sm:py-2 shadow-lg rounded-lg bg-green-100 border-2 border-green-500 min-w-20 sm:min-w-24 text-center relative">
     <Handle type="target" position={Position.Top} id="top" className="w-3 h-3 bg-green-600 border-2 border-white" />
     <Handle type="source" position={Position.Bottom} id="bottom" className="w-3 h-3 bg-green-600 border-2 border-white" />
     <Handle type="target" position={Position.Left} id="left" className="w-3 h-3 bg-green-600 border-2 border-white" />
@@ -92,16 +92,16 @@ const SwitchNode = ({ data }: any) => (
     
     <div className="flex items-center justify-center gap-2">
       <FaNetworkWired className="text-green-600" />
-      <div className="font-bold text-green-800">{data.label}</div>
+      <div className="font-bold text-green-900">{data.label}</div>
     </div>
-    <div className="text-xs text-gray-600 mt-1">
+    <div className="text-xs text-gray-700 mt-1 font-medium">
       {data.device?.interfaces?.length || 0} ports
     </div>
   </div>
 );
 
 const RouterNode = ({ data }: any) => (
-  <div className="px-4 py-2 shadow-lg rounded-lg bg-orange-100 border-2 border-orange-500 min-w-24 text-center relative">
+  <div className="px-2 sm:px-4 py-1 sm:py-2 shadow-lg rounded-lg bg-orange-100 border-2 border-orange-500 min-w-20 sm:min-w-24 text-center relative">
     <Handle type="target" position={Position.Top} id="top" className="w-3 h-3 bg-orange-600 border-2 border-white" />
     <Handle type="source" position={Position.Bottom} id="bottom" className="w-3 h-3 bg-orange-600 border-2 border-white" />
     <Handle type="target" position={Position.Left} id="left" className="w-3 h-3 bg-orange-600 border-2 border-white" />
@@ -109,9 +109,9 @@ const RouterNode = ({ data }: any) => (
     
     <div className="flex items-center justify-center gap-2">
       <FaRoute className="text-orange-600" />
-      <div className="font-bold text-orange-800">{data.label}</div>
+      <div className="font-bold text-orange-900">{data.label}</div>
     </div>
-    <div className="text-xs text-gray-600 mt-1">
+    <div className="text-xs text-gray-700 mt-1 font-medium">
       {data.device?.routingTable?.length || 0} routes
     </div>
   </div>
@@ -375,6 +375,21 @@ export default function RealisticNetworkFlow() {
         const traces = await simulator.ping(sourceId, targetIP);
         console.log(`🎯 UI: simulator.ping() returned ${traces.length} traces:`, traces);
         
+        // Debug ARP traces specifically before passing to PacketAnalyzer
+        const arpTraces = traces.filter(t => 
+          t.packet?.etherType === 0x0806 || 
+          (t.packet?.payload && 'operation' in (t.packet.payload as any)) ||
+          t.decision?.includes('ARP')
+        );
+        console.log(`🔍 UI: Found ${arpTraces.length} ARP traces to pass to PacketAnalyzer:`, arpTraces.map(t => ({
+          device: t.deviceName,
+          etherType: t.packet?.etherType,
+          etherTypeHex: t.packet?.etherType?.toString(16),
+          decision: t.decision,
+          hasPayload: !!t.packet?.payload,
+          payloadKeys: t.packet?.payload ? Object.keys(t.packet.payload) : null
+        })));
+        
         setPacketTraces(prev => {
           const newTraces = [...prev, ...traces];
           console.log(`🎯 UI: Setting packet traces - Previous: ${prev.length}, New: ${traces.length}, Total: ${newTraces.length}`);
@@ -395,17 +410,104 @@ export default function RealisticNetworkFlow() {
   };
 
   const checkNetworkPath = (sourceHost: Host, targetHost: Host): boolean => {
-    // Simple path checking - ensure both hosts have at least one connected interface
+    // Enhanced topology analysis for realistic path checking
+    console.log(`🔍 Checking network path from ${sourceHost.name} to ${targetHost.name}`);
+    
     const sourceConnected = sourceHost.interfaces.some(iface => iface.connectedTo);
     const targetConnected = targetHost.interfaces.some(iface => iface.connectedTo);
     
     if (!sourceConnected || !targetConnected) {
+      console.log(`❌ Path check failed: Source connected: ${sourceConnected}, Target connected: ${targetConnected}`);
       return false;
     }
     
-    // For more sophisticated path checking, we could implement a graph traversal
-    // For now, we'll let the actual ping simulation handle the detailed path validation
-    return true;
+    // Advanced path discovery using graph traversal
+    try {
+      const path = findNetworkPath(sourceHost, targetHost, simulator);
+      if (path.length > 0) {
+        console.log(`✅ Network path found: ${path.map(p => p.name).join(' → ')}`);
+        return true;
+      } else {
+        console.log(`❌ No network path exists between devices`);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error during path analysis:', error);
+      return true; // Fall back to letting ping handle validation
+    }
+  };
+
+  // Advanced network topology analysis
+  const findNetworkPath = (source: Host, target: Host, networkSim: NetworkSimulator): any[] => {
+    console.log(`🔍 Path Finding: Starting BFS from ${source.name} to ${target.name}`);
+    
+    const visited = new Set<string>();
+    const queue: { device: any; path: any[] }[] = [{ device: source, path: [source] }];
+    
+    console.log(`🔍 Path Finding: Source interfaces:`, source.interfaces.map(i => `${i.name} -> ${i.connectedTo ? 'connected' : 'not connected'}`));
+    console.log(`🔍 Path Finding: Target interfaces:`, target.interfaces.map(i => `${i.name} -> ${i.connectedTo ? 'connected' : 'not connected'}`));
+    
+    let iterations = 0;
+    while (queue.length > 0 && iterations < 20) { // Prevent infinite loops
+      iterations++;
+      const { device, path } = queue.shift()!;
+      
+      console.log(`🔍 Path Finding: Visiting ${device.name} (${device.type}), path so far: ${path.map(d => d.name).join(' → ')}`);
+      
+      if (device.id === target.id) {
+        console.log(`🔍 Path Finding: ✅ Found target! Path: ${path.map(d => d.name).join(' → ')}`);
+        return path; // Found path to target
+      }
+      
+      if (visited.has(device.id)) {
+        console.log(`🔍 Path Finding: Already visited ${device.name}, skipping`);
+        continue;
+      }
+      visited.add(device.id);
+      
+      // Explore connected devices
+      console.log(`🔍 Path Finding: Exploring ${device.interfaces.length} interfaces of ${device.name}`);
+      for (const iface of device.interfaces) {
+        console.log(`🔍 Path Finding: Interface ${iface.name}: connectedTo=${iface.connectedTo ? 'yes' : 'no'}`);
+        
+        if (iface.connectedTo) {
+          let deviceId: string;
+          if (typeof iface.connectedTo === 'object' && iface.connectedTo.deviceId) {
+            deviceId = iface.connectedTo.deviceId;
+          } else if (typeof iface.connectedTo === 'string') {
+            // Handle legacy string format: "deviceB-interfaceB"
+            deviceId = iface.connectedTo.split('-')[0];
+          } else {
+            continue;
+          }
+          
+          console.log(`🔍 Path Finding: Found connection to device ${deviceId}`);
+          
+          const connectedDevice = networkSim.getDevice(deviceId);
+          if (connectedDevice) {
+            console.log(`🔍 Path Finding: Connected device is ${connectedDevice.name} (${connectedDevice.type})`);
+            
+            if (!visited.has(connectedDevice.id)) {
+              console.log(`🔍 Path Finding: Adding ${connectedDevice.name} to queue`);
+              queue.push({
+                device: connectedDevice,
+                path: [...path, connectedDevice]
+              });
+            } else {
+              console.log(`🔍 Path Finding: ${connectedDevice.name} already visited`);
+            }
+          } else {
+            console.log(`🔍 Path Finding: ❌ Could not find device with ID ${deviceId}`);
+          }
+        }
+      }
+      
+      console.log(`🔍 Path Finding: Queue now has ${queue.length} devices`);
+    }
+    
+    console.log(`🔍 Path Finding: ❌ No path found after ${iterations} iterations`);
+    console.log(`🔍 Path Finding: Visited devices: ${Array.from(visited).join(', ')}`);
+    return []; // No path found
   };
 
   const addHost = () => {
@@ -599,90 +701,88 @@ export default function RealisticNetworkFlow() {
   return (
     <div className="w-full bg-gray-900 h-screen flex flex-col">
       {/* Header */}
-      <div className="bg-gray-800 p-4 flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <h1 className="text-white text-xl font-bold">Realistic Network Simulator</h1>
-          <span className="text-green-400 text-sm px-2 py-1 bg-green-900 rounded">Isolated Environment</span>
+      <div className="bg-gray-800 p-2 sm:p-4 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-2 lg:gap-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full lg:w-auto">
           <div className="flex items-center gap-2">
+            <h1 className="text-white text-lg sm:text-xl font-bold">Realistic Network Simulator</h1>
+            <span className="text-green-400 text-xs sm:text-sm px-2 py-1 bg-green-900 rounded">Isolated Environment</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1 sm:gap-2">
             <button
               onClick={addHost}
-              className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+              className="px-2 sm:px-3 py-1 sm:py-2 bg-blue-600 text-white rounded text-xs sm:text-sm hover:bg-blue-700 flex items-center gap-1 sm:gap-2"
             >
-              <FaDesktop /> Add Host
+              <FaDesktop className="text-xs sm:text-sm" /> <span className="hidden sm:inline">Add</span> Host
             </button>
             <button
               onClick={addSwitch}
-              className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+              className="px-2 sm:px-3 py-1 sm:py-2 bg-green-600 text-white rounded text-xs sm:text-sm hover:bg-green-700 flex items-center gap-1 sm:gap-2"
             >
-              <FaNetworkWired /> Add Switch
+              <FaNetworkWired className="text-xs sm:text-sm" /> <span className="hidden sm:inline">Add</span> Switch
             </button>
             <button
               onClick={addRouter}
-              className="px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 flex items-center gap-2"
+              className="px-2 sm:px-3 py-1 sm:py-2 bg-orange-600 text-white rounded text-xs sm:text-sm hover:bg-orange-700 flex items-center gap-1 sm:gap-2"
             >
-              <FaRoute /> Add Router
+              <FaRoute className="text-xs sm:text-sm" /> <span className="hidden sm:inline">Add</span> Router
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1 sm:gap-2 w-full lg:w-auto justify-start lg:justify-end">
           <button
             onClick={() => {
               setIsPingMode(!isPingMode);
               setPingSource(null); // Clear any existing ping source
             }}
-            className={`px-3 py-2 ${isPingMode ? 'bg-yellow-600' : 'bg-gray-600'} text-white rounded-lg hover:${isPingMode ? 'bg-yellow-700' : 'bg-gray-700'} flex items-center gap-2`}
+            className={`px-2 sm:px-3 py-1 sm:py-2 ${isPingMode ? 'bg-yellow-600' : 'bg-gray-600'} text-white rounded text-xs sm:text-sm hover:${isPingMode ? 'bg-yellow-700' : 'bg-gray-700'} flex items-center gap-1 sm:gap-2`}
           >
-            <FaPlay /> {isPingMode ? 'Exit Ping Mode' : 'Start Ping Mode'}
+            <FaPlay className="text-xs sm:text-sm" /> <span className="hidden md:inline">{isPingMode ? 'Exit Ping Mode' : 'Start Ping Mode'}</span><span className="md:hidden">Ping</span>
           </button>
           <button
             onClick={() => setShowTutorial(true)}
-            className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
+            className="px-2 sm:px-3 py-1 sm:py-2 bg-purple-600 text-white rounded text-xs sm:text-sm hover:bg-purple-700 flex items-center gap-1 sm:gap-2"
           >
-            <FaBook /> Quick Guide
+            <FaBook className="text-xs sm:text-sm" /> <span className="hidden md:inline">Quick Guide</span><span className="md:hidden">Guide</span>
           </button>
-          {/* <button
-            onClick={() => setShowEducationalTutorials(true)}
-            className="px-3 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 flex items-center gap-2"
-          >
-            <FaGraduationCap /> Learn
-          </button> */}
           <button
             onClick={() => setShowNetworkAnalyzer(true)}
-            className="px-3 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 flex items-center gap-2"
+            className="px-2 sm:px-3 py-1 sm:py-2 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700 flex items-center gap-1 sm:gap-2"
           >
-            <FaSearch /> Analyze
+            <FaSearch className="text-xs sm:text-sm" /> <span className="hidden md:inline">Analyze</span><span className="md:hidden">Analyze</span>
           </button>
           <button
             onClick={() => setShowPacketAnalyzer(!showPacketAnalyzer)}
-            className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
+            className="px-2 sm:px-3 py-1 sm:py-2 bg-indigo-600 text-white rounded text-xs sm:text-sm hover:bg-indigo-700 flex items-center gap-1 sm:gap-2"
           >
-            <FaEye /> Packet Analyzer
+            <FaEye className="text-xs sm:text-sm" /> <span className="hidden md:inline">Packet Analyzer</span><span className="md:hidden">Packets</span>
           </button>
         </div>
       </div>
 
       {/* Info Bar */}
-      <div className="bg-gray-700 p-2 text-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <div className="bg-gray-700 p-2 text-xs sm:text-sm">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
             {!pingSource ? (
               <>
-                <span className="text-white">🔗 NO CONNECTIONS: Drag from device to device to create links</span>
-                <span className="text-white">⚙️ NO IPs: Double-click device → CLI → "ip eth0 192.168.1.10 255.255.255.0"</span>
+                <span className="text-white hidden sm:inline">🔗 NO CONNECTIONS: Drag from device to device to create links</span>
+                <span className="text-white sm:hidden">🔗 Drag devices to connect</span>
+                <span className="text-white hidden sm:inline">⚙️ NO IPs: Double-click device → CLI → "ip eth0 192.168.1.10 255.255.255.0"</span>
+                <span className="text-white sm:hidden">⚙️ Double-click to configure</span>
                 {isPingMode ? (
                   <span className="text-yellow-300">📡 PING MODE: Click source host, then target host</span>
                 ) : (
-                  <span className="text-white">🎯 After connecting & configuring, use "Start Ping Mode"</span>
+                  <span className="text-white hidden sm:inline">🎯 After connecting & configuring, use "Start Ping Mode"</span>
                 )}
               </>
             ) : (
               <span className="text-yellow-300 font-medium">🎯 Click target host to ping from {simulator.getDevice(pingSource)?.name}</span>
             )}
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-white">Devices: {nodes.length}</span>
-            <span className="text-white">Links: {edges.length}</span>
+          <div className="flex items-center gap-2 sm:gap-4">
+            <span className="text-white text-xs sm:text-sm">Devices: {nodes.length}</span>
+            <span className="text-white text-xs sm:text-sm">Links: {edges.length}</span>
             {pingSource && (
               <button 
                 onClick={() => {
@@ -699,9 +799,9 @@ export default function RealisticNetworkFlow() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex">
+      <div className="flex-1 flex flex-col lg:flex-row">
         {/* Network Diagram */}
-        <div className={`${showPacketAnalyzer ? 'w-2/3' : 'w-full'} h-full`}>
+        <div className={`${showPacketAnalyzer ? 'lg:w-2/3 h-1/2 lg:h-full' : 'w-full h-full'}`}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -721,7 +821,7 @@ export default function RealisticNetworkFlow() {
 
         {/* Packet Analyzer */}
         {showPacketAnalyzer && (
-          <div className="w-1/3 h-full border-l border-gray-300">
+          <div className="lg:w-1/3 h-1/2 lg:h-full border-t lg:border-t-0 lg:border-l border-gray-300">
             <PacketAnalyzer
               traces={packetTraces}
               onStartCapture={startPacketCapture}

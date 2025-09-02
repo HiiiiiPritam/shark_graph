@@ -117,7 +117,8 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
           return [`Unknown command: ${command}. Type 'help' for available commands.`];
       }
     } catch (error) {
-      return [`Error: ${error}`];
+      console.error('Command processing error:', error);
+      return [`Error executing command: ${error}. Please check the console for details.`];
     }
   };
 
@@ -311,19 +312,43 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
       return ['ARP table not available on switches'];
     }
     
-    const arpTable = device.type === 'host' ? 
-      (device as Host).arpTable : 
-      (device as Router).showARPTable();
-    
-    const output = ['ARP Table:'];
-    output.push('IP Address      MAC Address       Interface   Type     Age');
-    output.push('---------------------------------------------------------');
-    
-    arpTable.forEach(entry => {
-      output.push(`${entry.ipAddress.address.padEnd(16)} ${entry.macAddress.address.padEnd(18)} ${entry.interface.padEnd(11)} ${entry.type.padEnd(8)} ${entry.age}s`);
-    });
-    
-    return output;
+    try {
+      const arpTable = device.type === 'host' ? 
+        (device as Host).arpTable : 
+        (device as Router).showARPTable();
+      
+      const output = ['ARP Table:'];
+      output.push('IP Address      MAC Address       Interface   Type     Age');
+      output.push('---------------------------------------------------------');
+      
+      if (!arpTable || arpTable.length === 0) {
+        output.push('No ARP entries found. Perform a ping to populate the ARP table.');
+        return output;
+      }
+      
+      arpTable.forEach(entry => {
+        try {
+          // Handle both old and new ARP entry formats
+          const entryType = entry.type || (entry.isStatic ? 'static' : 'dynamic');
+          const entryAge = entry.age !== undefined ? entry.age : 
+            (entry.expirationTime ? Math.floor((Date.now() - (entry.expirationTime - 300000)) / 1000) : 0);
+          
+          const ipAddr = entry.ipAddress?.address || 'N/A';
+          const macAddr = entry.macAddress?.address || 'N/A';
+          const iface = entry.interface || 'N/A';
+          
+          output.push(`${ipAddr.padEnd(16)} ${macAddr.padEnd(18)} ${iface.padEnd(11)} ${entryType.padEnd(8)} ${entryAge}s`);
+        } catch (entryError) {
+          console.error('Error processing ARP entry:', entryError);
+          output.push('Error processing ARP entry - check console for details');
+        }
+      });
+      
+      return output;
+    } catch (error) {
+      console.error('Error accessing ARP table:', error);
+      return ['Error accessing ARP table - check console for details'];
+    }
   };
 
   const showMACTable = (): string[] => {
@@ -428,7 +453,13 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
                 }
               </div>
               <div>
-                <span className="font-medium text-gray-800">Connected To:</span> {iface.connectedTo || 'Not connected'}
+                <span className="font-medium text-gray-800">Connected To:</span> {
+                  iface.connectedTo 
+                    ? (typeof iface.connectedTo === 'object' 
+                       ? `${iface.connectedTo.deviceId}:${iface.connectedTo.interfaceName}` 
+                       : iface.connectedTo)
+                    : 'Not connected'
+                }
               </div>
             </div>
           </div>
@@ -498,48 +529,74 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
   const renderARPTable = () => {
     if (device.type === 'switch') return null;
     
-    const arpTable = device.type === 'host' ? 
-      (device as Host).arpTable : 
-      (device as Router).showARPTable();
+    try {
+      const arpTable = device.type === 'host' ? 
+        (device as Host).arpTable : 
+        (device as Router).showARPTable();
 
-    return (
-      <div className="text-gray-900">
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-800">
-          <FaInfo /> ARP Table
-        </h3>
-        
-        <div className="overflow-x-auto">
-          <table className="min-w-full border border-gray-300">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="px-4 py-2 text-left text-gray-800">IP Address</th>
-                <th className="px-4 py-2 text-left text-gray-800">MAC Address</th>
-                <th className="px-4 py-2 text-left text-gray-800">Interface</th>
-                <th className="px-4 py-2 text-left text-gray-800">Type</th>
-                <th className="px-4 py-2 text-left text-gray-800">Age</th>
-              </tr>
-            </thead>
-            <tbody>
-              {arpTable.map((entry, idx) => (
-                <tr key={idx} className="border-t">
-                  <td className="px-4 py-2 text-gray-700">{entry.ipAddress.address}</td>
-                  <td className="px-4 py-2 font-mono text-gray-700">{entry.macAddress.address}</td>
-                  <td className="px-4 py-2 text-gray-700">{entry.interface}</td>
-                  <td className="px-4 py-2 text-gray-700">
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      entry.type === 'static' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                    }`}>
-                      {entry.type.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-gray-700">{entry.age}s</td>
+      return (
+        <div className="text-gray-900">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-800">
+            <FaInfo /> ARP Table
+          </h3>
+          
+          <div className="overflow-x-auto">
+            <table className="min-w-full border border-gray-300">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="px-4 py-2 text-left text-gray-800">IP Address</th>
+                  <th className="px-4 py-2 text-left text-gray-800">MAC Address</th>
+                  <th className="px-4 py-2 text-left text-gray-800">Interface</th>
+                  <th className="px-4 py-2 text-left text-gray-800">Type</th>
+                  <th className="px-4 py-2 text-left text-gray-800">Age</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {arpTable && arpTable.map((entry, idx) => {
+                  // Handle both old and new ARP entry formats
+                  const entryType = entry.type || (entry.isStatic ? 'static' : 'dynamic');
+                  const entryAge = entry.age !== undefined ? entry.age : 
+                    (entry.expirationTime ? Math.floor((Date.now() - (entry.expirationTime - 300000)) / 1000) : 0);
+                  
+                  return (
+                    <tr key={idx} className="border-t">
+                      <td className="px-4 py-2 text-gray-700">{entry.ipAddress?.address || 'N/A'}</td>
+                      <td className="px-4 py-2 font-mono text-gray-700">{entry.macAddress?.address || 'N/A'}</td>
+                      <td className="px-4 py-2 text-gray-700">{entry.interface || 'N/A'}</td>
+                      <td className="px-4 py-2 text-gray-700">
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          entryType === 'static' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                        }`}>
+                          {entryType.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-gray-700">{entryAge}s</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {(!arpTable || arpTable.length === 0) && (
+              <div className="text-center py-8 text-gray-500">
+                No ARP entries found. Perform a ping to populate the ARP table.
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    );
+      );
+    } catch (error) {
+      console.error('Error rendering ARP table:', error);
+      return (
+        <div className="text-gray-900">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-800">
+            <FaInfo /> ARP Table
+          </h3>
+          <div className="text-center py-8 text-red-500 bg-red-50 border border-red-200 rounded">
+            Error displaying ARP table. Please check the console for details.
+          </div>
+        </div>
+      );
+    }
   };
 
   const renderMACTable = () => {

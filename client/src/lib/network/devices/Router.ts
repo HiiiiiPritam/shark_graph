@@ -1,5 +1,6 @@
 import {
   Router as RouterInterface,
+  Host as HostInterface,
   NetworkInterface,
   IPAddress,
   MACAddress,
@@ -36,6 +37,7 @@ export class Router implements RouterInterface {
   private ripTimer: NodeJS.Timeout | null = null;
   private arpTimer: NodeJS.Timeout | null = null;
   private transmitCallback?: (frame: EthernetFrame, fromDevice: string, outgoingInterface: string) => Promise<void>;
+  private simulator?: any;
   
   private readonly ARP_TIMEOUT = 240; // 4 minutes
   private readonly RIP_UPDATE_INTERVAL = 30; // 30 seconds
@@ -84,6 +86,34 @@ export class Router implements RouterInterface {
     this.transmitCallback = callback;
   }
 
+  // Set simulator reference for trace collection
+  setSimulator(simulator: any): void {
+    this.simulator = simulator;
+  }
+
+  // Helper method to find device by IP address in the simulator
+  private findDeviceByIP(ipAddress: string): HostInterface | RouterInterface | null {
+    if (!this.simulator) return null;
+    
+    try {
+      const allDevices = this.simulator.getAllDevices();
+      for (const device of allDevices) {
+        if (device.type === 'host' || device.type === 'router') {
+          const networkDevice = device as HostInterface | RouterInterface;
+          for (const iface of networkDevice.interfaces) {
+            if (iface.ipAddress?.address === ipAddress) {
+              return networkDevice;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error finding device by IP:', error);
+    }
+    
+    return null;
+  }
+
   // Interface Management
   addInterface(name: string, macAddress: MACAddress, ipAddress?: IPAddress): void {
     const newInterface: NetworkInterface = {
@@ -117,6 +147,7 @@ export class Router implements RouterInterface {
 
   // Packet Processing - Core Router Functionality
   async receiveFrame(frame: EthernetFrame, incomingInterface: string): Promise<void> {
+    console.log(`🛤️ Router ${this.name}: *** RECEIVEFRAME CALLED *** Received frame on ${incomingInterface}`);
     if (this.status === 'down') return;
 
     // Check if frame is for us (MAC address check)
@@ -143,11 +174,11 @@ export class Router implements RouterInterface {
 
   // IP Packet Processing
   async processIPPacket(ipPacket: IPPacket, incomingInterface: string): Promise<void> {
-    // Decrement TTL
+    // Decrement TTL for routing loop prevention
+    const originalTTL = ipPacket.timeToLive;
     ipPacket.timeToLive--;
     
     if (ipPacket.timeToLive <= 0) {
-      // Send ICMP Time Exceeded
       await this.sendICMPTimeExceeded(ipPacket, incomingInterface);
       return;
     }
@@ -173,11 +204,14 @@ export class Router implements RouterInterface {
 
   // IP Packet Forwarding
   async forwardIPPacket(ipPacket: IPPacket, incomingInterface: string): Promise<void> {
+    console.log(`🛤️ Router ${this.name}: Forwarding packet from ${ipPacket.sourceIP.address} to ${ipPacket.destinationIP.address}`);
+    console.log(`🛤️ Router ${this.name}: Received on interface: ${incomingInterface}`);
+    
     // Find best route
     const route = this.findBestRoute(ipPacket.destinationIP);
     
     if (!route) {
-      // No route to destination - send ICMP Destination Unreachable
+      // No route to destination - add detailed trace for debugging
       const noRouteTrace: PacketTrace = {
         stepNumber: this.packetTracer.getNextStepNumber(),
         deviceId: this.id,
@@ -185,11 +219,16 @@ export class Router implements RouterInterface {
         deviceType: 'router',
         action: 'dropped',
         incomingInterface,
-        packet: { id: '', sourceMac: { address: '' }, destinationMac: { address: '' }, etherType: 0x0800, payload: ipPacket, timestamp: Date.now() },
-        timestamp: Date.now(),
-        decision: `No route to destination ${ipPacket.destinationIP.address}`,
+        packet: { id: '', sourceMac: { address: '' }, destinationMac: { address: '' }, etherType: 0x0800, payload: ipPacket, timestamp: performance.now() },
+        timestamp: performance.now(),
+        decision: `No route to destination ${ipPacket.destinationIP.address}. Available routes: ${this.routingTable.map(r => `${r.destinationNetwork.address}/${NetworkStack.getPrefixLength(r.subnetMask)}`).join(', ')}`,
       };
       this.packetTracer.addTrace(noRouteTrace);
+      
+      console.error(`🛤️ Router ${this.name}: No route to ${ipPacket.destinationIP.address}`);
+      console.error(`🛤️ Router ${this.name}: Available routes:`, this.routingTable.map(r => 
+        `${r.destinationNetwork.address}/${NetworkStack.getPrefixLength(r.subnetMask)} via ${r.nextHop.address} on ${r.interface}`
+      ));
       
       await this.sendICMPDestinationUnreachable(ipPacket, incomingInterface);
       return;
@@ -223,8 +262,11 @@ export class Router implements RouterInterface {
       destinationMac: nextHopMAC,
       etherType: 0x0800,
       payload: ipPacket,
-      timestamp: Date.now(),
+      timestamp: performance.now(), // Use high-precision timestamp
     };
+
+    console.log(`🛤️ Router ${this.name}: Selected route - Outgoing interface: ${route.interface}, Next hop: ${nextHopIP.address}`);
+    console.log(`🛤️ Router ${this.name}: Forwarding from ${incomingInterface} → ${route.interface}`);
 
     const forwardTrace: PacketTrace = {
       stepNumber: this.packetTracer.getNextStepNumber(),
@@ -235,8 +277,8 @@ export class Router implements RouterInterface {
       incomingInterface,
       outgoingInterface: route.interface,
       packet: newFrame,
-      timestamp: Date.now(),
-      decision: `Forwarding to ${ipPacket.destinationIP.address} via ${nextHopIP.address} on ${route.interface}`,
+      timestamp: performance.now(), // Use high-precision timestamp
+      decision: `Forwarded to ${ipPacket.destinationIP.address} via ${route.interface} (received on ${incomingInterface})`,
       routingTableUsed: route,
     };
     this.packetTracer.addTrace(forwardTrace);
@@ -283,8 +325,14 @@ export class Router implements RouterInterface {
     let longestPrefix = -1;
     let lowestMetric = Infinity;
 
+    console.log(`🔍 Router ${this.name}: Finding route to ${destination.address}`);
+    console.log(`🔍 Router ${this.name}: Routing table has ${this.routingTable.length} entries`);
+
     for (const route of this.routingTable) {
-      if (this.isIPInNetwork(destination, route.destinationNetwork, route.subnetMask)) {
+      const isMatch = this.isIPInNetwork(destination, route.destinationNetwork, route.subnetMask);
+      console.log(`🔍   Route: ${route.destinationNetwork.address}/${NetworkStack.getPrefixLength(route.subnetMask)} via ${route.nextHop.address} - Match: ${isMatch}`);
+      
+      if (isMatch) {
         const prefixLength = NetworkStack.getPrefixLength(route.subnetMask);
         
         // Longest prefix match, then lowest metric
@@ -293,8 +341,15 @@ export class Router implements RouterInterface {
           longestPrefix = prefixLength;
           lowestMetric = route.metric;
           bestRoute = route;
+          console.log(`🔍   New best route found: /${prefixLength} metric ${route.metric}`);
         }
       }
+    }
+
+    if (bestRoute) {
+      console.log(`🔍 Router ${this.name}: Best route to ${destination.address}: ${bestRoute.destinationNetwork.address}/${NetworkStack.getPrefixLength(bestRoute.subnetMask)} via ${bestRoute.nextHop.address} on ${bestRoute.interface}`);
+    } else {
+      console.log(`🔍 Router ${this.name}: No route found to ${destination.address}`);
     }
 
     return bestRoute;
@@ -321,6 +376,9 @@ export class Router implements RouterInterface {
       throw new Error(`Interface ${outgoingInterface} not configured`);
     }
 
+    // Clear any existing ARP entry for this IP to avoid duplicates
+    this.arpTable = this.arpTable.filter(e => e.ipAddress.address !== targetIP.address);
+
     const arpRequest: ARPPacket = {
       hardwareType: 1,
       protocolType: 0x0800,
@@ -339,7 +397,7 @@ export class Router implements RouterInterface {
       destinationMac: { address: 'ff:ff:ff:ff:ff:ff' },
       etherType: 0x0806,
       payload: arpRequest,
-      timestamp: Date.now(),
+      timestamp: performance.now(), // Use high-precision timestamp
     };
 
     const arpTrace: PacketTrace = {
@@ -350,13 +408,33 @@ export class Router implements RouterInterface {
       action: 'generated',
       outgoingInterface,
       packet: frame,
-      timestamp: Date.now(),
-      decision: `Generated ARP request for ${targetIP.address}`,
+      timestamp: performance.now(), // Use high-precision timestamp
+      decision: `ARP Request: Who has ${targetIP.address}? Tell ${sourceInterface.ipAddress.address}`,
     };
     this.packetTracer.addTrace(arpTrace);
 
-    // Simulate ARP response (in real implementation, wait for response)
-    const targetMac = NetworkStack.generateRandomMAC();
+    // Clear any existing ARP entry for this IP to avoid duplicates
+    this.arpTable = this.arpTable.filter(e => e.ipAddress.address !== targetIP.address);
+
+    // Try to find the actual device and get its real MAC address
+    let targetMac: MACAddress | null = null;
+    
+    if (this.simulator) {
+      const targetDevice = this.findDeviceByIP(targetIP.address);
+      if (targetDevice) {
+        const targetInterface = targetDevice.interfaces.find(i => i.ipAddress?.address === targetIP.address);
+        if (targetInterface) {
+          targetMac = targetInterface.macAddress;
+        }
+      }
+    }
+
+    // Fallback to generating a MAC if we can't find the real device
+    if (!targetMac) {
+      targetMac = NetworkStack.generateRandomMAC();
+      console.warn(`${this.name}: Could not find real MAC for ${targetIP.address}, using generated MAC`);
+    }
+
     this.addARPEntry(targetIP, targetMac, outgoingInterface);
     
     return targetMac;
@@ -390,7 +468,7 @@ export class Router implements RouterInterface {
           destinationMac: arpPacket.senderHardwareAddress,
           etherType: 0x0806,
           payload: arpReply,
-          timestamp: Date.now(),
+          timestamp: performance.now(), // Use high-precision timestamp
         };
 
         await this.transmitFrame(frame, incomingInterface);
@@ -436,7 +514,7 @@ export class Router implements RouterInterface {
         sourceIP: sourceInterface.ipAddress,
         destinationIP: ipPacket.sourceIP,
         payload: echoReply,
-        timestamp: Date.now(),
+        timestamp: performance.now(), // Use high-precision timestamp
       };
 
       const pingReplyTrace: PacketTrace = {
@@ -446,8 +524,8 @@ export class Router implements RouterInterface {
         deviceType: 'router',
         action: 'generated',
         outgoingInterface: incomingInterface,
-        packet: { id: '', sourceMac: { address: '' }, destinationMac: { address: '' }, etherType: 0x0800, payload: replyPacket, timestamp: Date.now() },
-        timestamp: Date.now(),
+        packet: { id: '', sourceMac: { address: '' }, destinationMac: { address: '' }, etherType: 0x0800, payload: replyPacket, timestamp: performance.now() },
+        timestamp: performance.now(), // Use high-precision timestamp
         decision: `Generated ICMP Echo Reply to ${ipPacket.sourceIP.address}`,
       };
       this.packetTracer.addTrace(pingReplyTrace);
@@ -485,7 +563,7 @@ export class Router implements RouterInterface {
       sourceIP: sourceInterface.ipAddress,
       destinationIP: originalPacket.sourceIP,
       payload: icmpPacket,
-      timestamp: Date.now(),
+      timestamp: performance.now(), // Use high-precision timestamp
     };
 
     await this.forwardIPPacket(replyPacket, incomingInterface);
@@ -519,7 +597,7 @@ export class Router implements RouterInterface {
       sourceIP: sourceInterface.ipAddress,
       destinationIP: originalPacket.sourceIP,
       payload: icmpPacket,
-      timestamp: Date.now(),
+      timestamp: performance.now(), // Use high-precision timestamp
     };
 
     const ttlTrace: PacketTrace = {
@@ -528,8 +606,8 @@ export class Router implements RouterInterface {
       deviceName: this.name,
       deviceType: 'router',
       action: 'generated',
-      packet: { id: '', sourceMac: { address: '' }, destinationMac: { address: '' }, etherType: 0x0800, payload: replyPacket, timestamp: Date.now() },
-      timestamp: Date.now(),
+      packet: { id: '', sourceMac: { address: '' }, destinationMac: { address: '' }, etherType: 0x0800, payload: replyPacket, timestamp: performance.now() },
+      timestamp: performance.now(), // Use high-precision timestamp
       decision: `Generated ICMP Time Exceeded - TTL expired for packet to ${originalPacket.destinationIP.address}`,
     };
     this.packetTracer.addTrace(ttlTrace);
@@ -591,17 +669,23 @@ export class Router implements RouterInterface {
   }
 
   private addARPEntry(ip: IPAddress, mac: MACAddress, interfaceName: string): void {
-    // Remove existing entry
-    this.arpTable = this.arpTable.filter(e => e.ipAddress.address !== ip.address);
-    
-    // Add new entry
-    this.arpTable.push({
-      ipAddress: ip,
-      macAddress: mac,
-      interface: interfaceName,
-      type: 'dynamic',
-      age: 0,
-    });
+    try {
+      // Remove existing entry to prevent duplicates
+      this.arpTable = this.arpTable.filter(e => e.ipAddress.address !== ip.address);
+      
+      // Add new entry with consistent structure
+      this.arpTable.push({
+        ipAddress: ip,
+        macAddress: mac,
+        interface: interfaceName,
+        type: 'dynamic',
+        age: 0,
+      });
+      
+      console.log(`${this.name}: Added ARP entry - ${ip.address} -> ${mac.address}`);
+    } catch (error) {
+      console.error(`${this.name}: Error adding ARP entry:`, error);
+    }
   }
 
   private startARPAging(): void {
@@ -705,5 +789,15 @@ export class Router implements RouterInterface {
     const activeInterfaces = this.interfaces.filter(i => i.isUp).length;
     const protocols = this.routingProtocols.join(', ');
     return `Router ${this.name} (${this.status}) - Interfaces: ${activeInterfaces}/${this.interfaces.length} up - Routes: ${this.routingTable.length} - Protocols: ${protocols}`;
+  }
+
+  // Get all packet traces from this device
+  getTraces(): PacketTrace[] {
+    return this.packetTracer.getTraces();
+  }
+
+  // Clear packet traces from this device  
+  clearTraces(): void {
+    this.packetTracer.clearTraces();
   }
 }

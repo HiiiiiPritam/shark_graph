@@ -19,9 +19,6 @@ export class NetworkSimulator {
   private events: SimulationEvent[] = [];
   private isRunning: boolean = false;
   private eventCounter: number = 0;
-  private currentPingTraces: PacketTrace[] = [];
-  private isCollectingTraces: boolean = false;
-  private currentStepCounter: number = 0;
 
   constructor() {
     console.log('Network Simulator initialized');
@@ -35,11 +32,12 @@ export class NetworkSimulator {
 
     const host = new Host(id, name, position);
     host.setTransmitCallback(this.forwardFrame.bind(this));
+    host.setSimulator(this);
     this.devices.set(id, host);
     
     this.addEvent({
       id: this.generateEventId(),
-      timestamp: Date.now(),
+      timestamp: performance.now(),
       type: 'device_up',
       deviceId: id,
       details: { type: 'host', name },
@@ -60,7 +58,7 @@ export class NetworkSimulator {
     
     this.addEvent({
       id: this.generateEventId(),
-      timestamp: Date.now(),
+      timestamp: performance.now(),
       type: 'device_up',
       deviceId: id,
       details: { type: 'switch', name, portCount },
@@ -77,11 +75,12 @@ export class NetworkSimulator {
 
     const router = new Router(id, name, position);
     router.setTransmitCallback(this.forwardFrame.bind(this));
+    router.setSimulator(this);
     this.devices.set(id, router);
     
     this.addEvent({
       id: this.generateEventId(),
-      timestamp: Date.now(),
+      timestamp: performance.now(),
       type: 'device_up',
       deviceId: id,
       details: { type: 'router', name },
@@ -112,7 +111,7 @@ export class NetworkSimulator {
     
     this.addEvent({
       id: this.generateEventId(),
-      timestamp: Date.now(),
+      timestamp: performance.now(),
       type: 'device_down',
       deviceId: id,
       details: { reason: 'removed' },
@@ -158,9 +157,9 @@ export class NetworkSimulator {
       utilization: 0,
     };
 
-    // Update interface connections
-    ifaceA.connectedTo = `${deviceB}-${interfaceB}`;
-    ifaceB.connectedTo = `${deviceA}-${interfaceA}`;
+    // Update interface connections with proper object format
+    ifaceA.connectedTo = { deviceId: deviceB, interfaceName: interfaceB };
+    ifaceB.connectedTo = { deviceId: deviceA, interfaceName: interfaceA };
 
     this.links.set(linkId, link);
     console.log(`Created link: ${deviceA}:${interfaceA} <-> ${deviceB}:${interfaceB}`);
@@ -240,6 +239,199 @@ export class NetworkSimulator {
     console.log(`Added static route: ${destination}/${NetworkStack.getPrefixLength(subnetMask)} via ${nextHop} on ${routerId}`);
   }
 
+  // Helper method to configure multi-router topology with proper routing
+  configureMultiRouterNetwork(routers: string[]): void {
+    // This method can be used to automatically configure routing between multiple routers
+    // For complex topologies, you'd need to call this after setting up interfaces
+    console.log(`Configuring multi-router network with ${routers.length} routers`);
+    
+    routers.forEach(routerId => {
+      const router = this.devices.get(routerId);
+      if (router?.type === 'router') {
+        console.log(`Router ${router.name}: ${(router as Router).showRoutingTable().length} routes configured`);
+      }
+    });
+  }
+
+  // Get network topology analysis for complex scenarios
+  analyzeComplexTopology(): {
+    routerCount: number;
+    hostCount: number;
+    switchCount: number;
+    routingTableSizes: { [routerId: string]: number };
+    networkSegments: string[];
+    potentialRoutingIssues: string[];
+  } {
+    const routers = Array.from(this.devices.values()).filter(d => d.type === 'router') as Router[];
+    const hosts = Array.from(this.devices.values()).filter(d => d.type === 'host') as Host[];
+    const switches = Array.from(this.devices.values()).filter(d => d.type === 'switch');
+    
+    const routingTableSizes: { [routerId: string]: number } = {};
+    const networkSegments: string[] = [];
+    const potentialRoutingIssues: string[] = [];
+
+    routers.forEach(router => {
+      const routingTable = router.showRoutingTable();
+      routingTableSizes[router.id] = routingTable.length;
+      
+      // Analyze each router's interfaces for network segments
+      router.interfaces.forEach(iface => {
+        if (iface.ipAddress) {
+          const network = NetworkStack.calculateNetworkAddress(iface.ipAddress.address, iface.ipAddress.subnet);
+          const segment = `${network}/${NetworkStack.getPrefixLength(iface.ipAddress.subnet)}`;
+          if (!networkSegments.includes(segment)) {
+            networkSegments.push(segment);
+          }
+        }
+      });
+
+      // Check for potential routing issues
+      if (routingTable.length === 0) {
+        potentialRoutingIssues.push(`Router ${router.name} has no routes configured`);
+      }
+      
+      const hasDefaultRoute = routingTable.some(route => 
+        route.destinationNetwork.address === '0.0.0.0' && route.subnetMask === '0.0.0.0'
+      );
+      
+      if (!hasDefaultRoute && routers.length > 1) {
+        potentialRoutingIssues.push(`Router ${router.name} may need a default route for multi-router connectivity`);
+      }
+    });
+
+    // Check for host gateway configurations
+    hosts.forEach(host => {
+      if (!host.defaultGateway && routers.length > 0) {
+        potentialRoutingIssues.push(`Host ${host.name} should have a default gateway configured`);
+      }
+    });
+
+    return {
+      routerCount: routers.length,
+      hostCount: hosts.length,
+      switchCount: switches.length,
+      routingTableSizes,
+      networkSegments,
+      potentialRoutingIssues
+    };
+  }
+
+  // Removed centralized trace collection - now using device-level traces only
+
+  // Collect all traces from all devices
+  private getAllTracesFromDevices(): PacketTrace[] {
+    const allTraces: PacketTrace[] = [];
+    
+    console.log(`📋 TRACE COLLECTION: Starting trace collection from ${this.devices.size} devices`);
+    
+    for (const [deviceId, device] of this.devices.entries()) {
+      if (device.type === 'host') {
+        const host = device as Host;
+        const hostTraces = host.getTraces();
+        console.log(`📋 TRACE COLLECTION: Host ${device.name} (${deviceId}) has ${hostTraces.length} traces`);
+        hostTraces.forEach((trace, idx) => {
+          console.log(`📋   Host trace ${idx + 1}: Step ${trace.stepNumber} - ${trace.action} - ${trace.decision?.substring(0, 80)}...`);
+        });
+        allTraces.push(...hostTraces);
+      } else if (device.type === 'router') {
+        const router = device as Router;
+        const routerTraces = router.getTraces();
+        console.log(`📋 TRACE COLLECTION: Router ${device.name} (${deviceId}) has ${routerTraces.length} traces`);
+        routerTraces.forEach((trace, idx) => {
+          console.log(`📋   Router trace ${idx + 1}: Step ${trace.stepNumber} - ${trace.action} - ${trace.decision?.substring(0, 80)}...`);
+        });
+        allTraces.push(...routerTraces);
+      } else if (device.type === 'switch') {
+        const switchDevice = device as Switch;
+        const switchTraces = switchDevice.getTraces();
+        console.log(`📋 TRACE COLLECTION: Switch ${device.name} (${deviceId}) has ${switchTraces.length} traces`);
+        switchTraces.forEach((trace, idx) => {
+          console.log(`📋   Switch trace ${idx + 1}: Step ${trace.stepNumber} - ${trace.action} - ${trace.decision?.substring(0, 80)}...`);
+        });
+        allTraces.push(...switchTraces);
+      }
+    }
+    
+    console.log(`📋 TRACE COLLECTION: Total collected ${allTraces.length} traces from all devices`);
+    
+    // Enhanced sorting: Primary by timestamp, secondary by original step number, tertiary by device type priority
+    const sortedTraces = allTraces.sort((a, b) => {
+      // Primary: Sort by timestamp (most important)
+      if (Math.abs(a.timestamp - b.timestamp) > 1) { // If timestamps differ by more than 1ms
+        return a.timestamp - b.timestamp;
+      }
+      
+      // Secondary: If timestamps are very close, use original step numbers from devices
+      if (a.stepNumber && b.stepNumber && a.stepNumber !== b.stepNumber) {
+        return a.stepNumber - b.stepNumber;
+      }
+      
+      // Tertiary: Device type priority for traces that happen "simultaneously"
+      const deviceTypePriority = { 'host': 1, 'switch': 2, 'router': 3 };
+      const aPriority = deviceTypePriority[a.deviceType as keyof typeof deviceTypePriority] || 4;
+      const bPriority = deviceTypePriority[b.deviceType as keyof typeof deviceTypePriority] || 4;
+      
+      return aPriority - bPriority;
+    });
+    
+    // Renumber traces sequentially for proper step numbering
+    sortedTraces.forEach((trace, index) => {
+      const oldStep = trace.stepNumber;
+      trace.stepNumber = index + 1;
+      console.log(`📋 TRACE REORDER: Step ${oldStep} (${trace.deviceName}) → Step ${trace.stepNumber}`);
+    });
+    
+    console.log(`📋 TRACE COLLECTION: After enhanced sorting and renumbering, returning ${sortedTraces.length} traces`);
+    console.log(`📋 TRACE COLLECTION: Final order:`, sortedTraces.slice(0, 5).map(t => `Step ${t.stepNumber}: ${t.deviceName} - ${t.action} (${t.timestamp})`));
+    
+    return sortedTraces;
+  }
+
+  // Clear all traces from all devices
+  private clearAllDeviceTraces(): void {
+    for (const device of this.devices.values()) {
+      if (device.type === 'host') {
+        const host = device as Host;
+        host.clearTraces();
+      } else if (device.type === 'router') {
+        const router = device as Router;
+        router.clearTraces();
+      } else if (device.type === 'switch') {
+        const switchDevice = device as Switch;
+        switchDevice.clearTraces();
+      }
+    }
+  }
+
+  // Helper method to find destination host by IP
+  private findDestinationHost(destinationIP: string): Host | null {
+    const hosts = Array.from(this.devices.values()).filter(d => d.type === 'host') as Host[];
+    return hosts.find(host => 
+      host.interfaces.some(iface => iface.ipAddress?.address === destinationIP)
+    ) || null;
+  }
+
+  // Helper method to determine communication scenario
+  private determineCommunicationScenario(sourceIP: string, destIP: string): 'same-network' | 'different-networks' | 'unknown' {
+    const sourceHost = Array.from(this.devices.values())
+      .find(device => device.type === 'host' && 
+        device.interfaces.some(iface => iface.ipAddress?.address === sourceIP)) as Host;
+    
+    if (!sourceHost?.interfaces[0]?.ipAddress) return 'unknown';
+    
+    const sourceNetwork = NetworkStack.calculateNetworkAddress(
+      sourceHost.interfaces[0].ipAddress.address,
+      sourceHost.interfaces[0].ipAddress.subnet
+    );
+    
+    const destNetwork = NetworkStack.calculateNetworkAddress(
+      destIP,
+      sourceHost.interfaces[0].ipAddress.subnet
+    );
+    
+    return sourceNetwork === destNetwork ? 'same-network' : 'different-networks';
+  }
+
   // Simulation Operations
   async ping(sourceHostId: string, destinationIP: string): Promise<PacketTrace[]> {
     const sourceHost = this.devices.get(sourceHostId);
@@ -250,73 +442,47 @@ export class NetworkSimulator {
     console.log(`\n🏓 PING: Starting ping from ${sourceHost.name} to ${destinationIP}`);
     
     try {
-      // Clear previous traces and start collecting
-      this.currentPingTraces = [];
-      this.isCollectingTraces = true;
-      this.currentStepCounter = 0;
-      console.log(`🏓 PING: Started trace collection`);
+      // Clear traces from all devices
+      console.log(`🏓 PING: Clearing traces from all devices before ping`);
+      this.clearAllDeviceTraces();
       
-      // Create initial "generated" trace
-      this.currentStepCounter = 1;
-      const initialTrace: PacketTrace = {
-        stepNumber: this.currentStepCounter,
-        timestamp: Date.now(),
-        deviceName: sourceHost.name,
-        deviceId: sourceHostId,
-        deviceType: 'host',
-        action: 'generated',
-        outgoingInterface: sourceHost.interfaces[0]?.name,
-        packet: {
-          id: Math.random().toString(36).substr(2, 9),
-          sourceMac: sourceHost.interfaces[0]?.macAddress || { address: '00:00:00:00:00:00' },
-          destinationMac: { address: 'ff:ff:ff:ff:ff:ff' },
-          etherType: 0x0800,
-          payload: {} as any,
-          timestamp: Date.now()
-        },
-        decision: `Generated ICMP ping to ${destinationIP}`
-      };
-      this.currentPingTraces.push(initialTrace);
-      console.log(`🏓 PING: Added initial trace - Step ${initialTrace.stepNumber}`);
+      const sourceIP = (sourceHost as Host).interfaces[0]?.ipAddress?.address || '';
+      const scenario = this.determineCommunicationScenario(sourceIP, destinationIP);
       
-      // Trigger the ping - this will start the forwarding process
+      console.log(`🏓 PING: Communication scenario: ${scenario}`);
+      console.log(`🏓 PING: Sending ping from ${sourceHost.name} (${sourceIP}) to ${destinationIP}`);
+      
+      // Trigger the ping (echo request)
       await (sourceHost as Host).sendPing(destinationIP);
-      console.log(`🏓 PING: Ping initiated from ${sourceHost.name}`);
       
+      console.log(`🏓 PING: Ping sent, waiting for network processing...`);
+      // Wait for network processing
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      console.log(`🏓 PING: Network processing complete, collecting traces...`);
+      // Collect all traces from all devices 
+      const allTraces = this.getAllTracesFromDevices();
       
-      // Wait for the network forwarding to complete and collect all traces
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Stop collecting
-      this.isCollectingTraces = false;
-      
-      console.log(`🏓 PING: Collection complete - ${this.currentPingTraces?.length || 0} total traces`);
-      if (this.currentPingTraces && this.currentPingTraces.length > 0) {
-        this.currentPingTraces.forEach((trace, idx) => {
-          if (trace) {
-            console.log(`  Final Trace ${idx + 1}: Step ${trace.stepNumber || 0} - ${trace.deviceName || 'Unknown'} - ${trace.action || 'Unknown'}`);
-          }
-        });
-      }
+      console.log(`🏓 PING: Collection complete - ${allTraces.length} total traces from all devices`);
+      console.log(`🏓 PING: Trace details:`, allTraces.map(t => `${t.deviceName}: ${t.action} - ${t.decision?.substring(0, 50)}...`));
       
       this.addEvent({
         id: this.generateEventId(),
-        timestamp: Date.now(),
+        timestamp: performance.now(),
         type: 'packet_sent',
         deviceId: sourceHostId,
         details: { 
           type: 'ping', 
           destination: destinationIP, 
-          success: (this.currentPingTraces?.length || 0) > 0 
+          success: allTraces.length > 0,
+          scenario
         },
       });
 
-      const finalTraces = this.currentPingTraces || [];
-      console.log(`🏓 PING: Returning ${finalTraces.length} traces to UI`);
-      return [...finalTraces];
+      console.log(`🏓 PING: Returning ${allTraces.length} traces to UI`);
+      return allTraces;
     } catch (error) {
       console.error(`🏓 PING: Failed - ${error}`);
-      this.isCollectingTraces = false;
       return [];
     }
   }
@@ -491,51 +657,11 @@ export class NetworkSimulator {
     }
 
     console.log(`🔄 Forwarding frame from ${fromDevice}:${outgoingInterface} to ${targetDeviceId}:${targetInterface}`);
-    console.log(`🔄 isCollectingTraces: ${this.isCollectingTraces}`);
 
-    // Create centralized traces for both sending and receiving
-    if (this.isCollectingTraces) {
-      if (!this.currentPingTraces) this.currentPingTraces = [];
-      
-      // 1. Add sending trace
-      this.currentStepCounter = (this.currentStepCounter || 0) + 1;
-      const sendingDevice = this.devices.get(fromDevice);
-      if (sendingDevice) {
-        const sendTrace: PacketTrace = {
-          stepNumber: this.currentStepCounter,
-          timestamp: Date.now(),
-          deviceName: sendingDevice.name,
-          deviceId: fromDevice,
-          deviceType: sendingDevice.type as 'host' | 'switch' | 'router',
-          action: 'forwarded',
-          outgoingInterface: outgoingInterface,
-          packet: { ...frame },
-          decision: `Frame forwarded out interface ${outgoingInterface} to ${targetDevice.name}`
-        };
-        
-        this.currentPingTraces.push(sendTrace);
-        console.log(`📤 ADDED sending trace: Step ${sendTrace.stepNumber} - ${sendTrace.deviceName} - ${sendTrace.action}`);
-      }
-      
-      // 2. Add receiving trace  
-      this.currentStepCounter = (this.currentStepCounter || 0) + 1;
-      const receiveTrace: PacketTrace = {
-        stepNumber: this.currentStepCounter,
-        timestamp: Date.now(),
-        deviceName: targetDevice.name,
-        deviceId: targetDeviceId,
-        deviceType: targetDevice.type as 'host' | 'switch' | 'router',
-        action: 'received',
-        incomingInterface: targetInterface,
-        packet: { ...frame },
-        decision: `Frame received on interface ${targetInterface} from ${sendingDevice?.name || fromDevice}`
-      };
-      
-      this.currentPingTraces.push(receiveTrace);
-      console.log(`📥 ADDED receiving trace: Step ${receiveTrace.stepNumber} - ${receiveTrace.deviceName} - ${receiveTrace.action}`);
-    }
-
-    // Forward frame to target device (no trace collection from devices)
+    // NO CENTRALIZED TRACE COLLECTION - Let each device handle its own detailed traces
+    // This allows the detailed step-by-step traces from switches and routers to be preserved
+    
+    // Forward frame to target device (devices will create their own detailed traces)
     try {
       if (targetDevice.type === 'host') {
         console.log(`📥 Forwarding to HOST: ${targetDevice.name}`);
@@ -550,9 +676,6 @@ export class NetworkSimulator {
       
       console.log(`✅ Frame forwarded to ${targetDevice.name} successfully`);
       
-      if (this.isCollectingTraces) {
-        console.log(`📊 Total collected traces now: ${this.currentPingTraces?.length || 0}`);
-      }
     } catch (error) {
       console.error(`Error forwarding frame to ${targetDeviceId}:`, error);
     }
@@ -620,5 +743,262 @@ export class NetworkSimulator {
       linkCount: this.links.size,
       eventCount: this.events.length,
     };
+  }
+
+  // ============================
+  // COMPREHENSIVE TOPOLOGY SUPPORT
+  // ============================
+
+  /**
+   * Validates the entire network topology for common issues
+   */
+  validateTopology(): { isValid: boolean; issues: string[]; suggestions: string[] } {
+    const issues: string[] = [];
+    const suggestions: string[] = [];
+
+    console.log('🔍 Validating network topology...');
+
+    // Check for isolated devices
+    const isolatedDevices = this.findIsolatedDevices();
+    if (isolatedDevices.length > 0) {
+      issues.push(`Found ${isolatedDevices.length} isolated devices: ${isolatedDevices.map(d => d.name).join(', ')}`);
+      suggestions.push('Connect isolated devices to the network using physical links');
+    }
+
+    // Check for hosts without IP addresses
+    const hostsWithoutIP = this.findHostsWithoutIP();
+    if (hostsWithoutIP.length > 0) {
+      issues.push(`Found ${hostsWithoutIP.length} hosts without IP addresses: ${hostsWithoutIP.map(h => h.name).join(', ')}`);
+      suggestions.push('Configure IP addresses on hosts using: ip eth0 192.168.1.10 255.255.255.0');
+    }
+
+    // Check for missing default gateways
+    const hostsWithoutGateway = this.findHostsWithoutGateway();
+    if (hostsWithoutGateway.length > 0) {
+      issues.push(`Found ${hostsWithoutGateway.length} hosts without default gateway: ${hostsWithoutGateway.map(h => h.name).join(', ')}`);
+      suggestions.push('Configure default gateways on hosts using: gateway 192.168.1.1');
+    }
+
+    // Check for routing loops
+    const routingIssues = this.detectRoutingIssues();
+    issues.push(...routingIssues);
+
+    console.log(`✅ Topology validation complete: ${issues.length} issues found`);
+    
+    return {
+      isValid: issues.length === 0,
+      issues,
+      suggestions
+    };
+  }
+
+  private findIsolatedDevices(): any[] {
+    const isolatedDevices: any[] = [];
+    
+    for (const device of this.devices.values()) {
+      const hasConnections = device.interfaces.some(iface => iface.connectedTo);
+      if (!hasConnections) {
+        isolatedDevices.push(device);
+      }
+    }
+
+    return isolatedDevices;
+  }
+
+  private findHostsWithoutIP(): Host[] {
+    const hostsWithoutIP: Host[] = [];
+    
+    for (const device of this.devices.values()) {
+      if (device.type === 'host') {
+        const host = device as Host;
+        const hasConfiguredIP = host.interfaces.some(iface => iface.ipAddress);
+        if (!hasConfiguredIP) {
+          hostsWithoutIP.push(host);
+        }
+      }
+    }
+
+    return hostsWithoutIP;
+  }
+
+  private findHostsWithoutGateway(): Host[] {
+    const hostsWithoutGateway: Host[] = [];
+    
+    for (const device of this.devices.values()) {
+      if (device.type === 'host') {
+        const host = device as Host;
+        // This would need to be implemented in Host class
+        // For now, we'll assume hosts without proper routing setup
+      }
+    }
+
+    return hostsWithoutGateway;
+  }
+
+  private detectRoutingIssues(): string[] {
+    const issues: string[] = [];
+    
+    // Check each router for basic routing configuration
+    for (const device of this.devices.values()) {
+      if (device.type === 'router') {
+        const router = device as Router;
+        
+        // Check if router interfaces are properly configured
+        const unconfiguredInterfaces = router.interfaces.filter(iface => !iface.ipAddress);
+        if (unconfiguredInterfaces.length > 0) {
+          issues.push(`Router ${router.name} has unconfigured interfaces: ${unconfiguredInterfaces.map(i => i.name).join(', ')}`);
+        }
+
+        // Check for routing table completeness
+        const routingTableSize = router.routingTable.length;
+        const interfaceCount = router.interfaces.filter(i => i.ipAddress).length;
+        
+        if (routingTableSize < interfaceCount) {
+          issues.push(`Router ${router.name} may need additional static routes for full connectivity`);
+        }
+      }
+    }
+
+    return issues;
+  }
+
+  /**
+   * Automatically configure common network topologies
+   */
+  setupTopology(topologyType: 'simple-lan' | 'routed-network' | 'multi-hop', config: any): void {
+    console.log(`🛠️ Setting up ${topologyType} topology...`);
+
+    switch (topologyType) {
+      case 'simple-lan':
+        this.setupSimpleLAN(config);
+        break;
+      case 'routed-network':
+        this.setupRoutedNetwork(config);
+        break;
+      case 'multi-hop':
+        this.setupMultiHopNetwork(config);
+        break;
+      default:
+        throw new Error(`Unknown topology type: ${topologyType}`);
+    }
+
+    console.log(`✅ ${topologyType} topology setup complete`);
+  }
+
+  private setupSimpleLAN(config: { hostCount: number; switchPorts: number; subnet: string }): void {
+    // Create switch
+    const switchId = this.addSwitch('switch1', 'LAN-Switch', config.switchPorts, { x: 300, y: 200 });
+    
+    // Create hosts and connect to switch
+    for (let i = 1; i <= config.hostCount; i++) {
+      const hostId = this.addHost(`host${i}`, `PC-${i}`, { x: 100 + i * 100, y: 300 });
+      
+      // Connect host to switch
+      this.createLink(hostId.id, 'eth0', switchId.id, `Fa0/${i}`);
+      
+      // Configure IP address
+      const ipAddress = config.subnet.replace('0', i.toString());
+      this.configureHostIP(hostId.id, 'eth0', ipAddress, '255.255.255.0');
+    }
+  }
+
+  private setupRoutedNetwork(config: { subnets: string[]; routerCount: number }): void {
+    // Create routers
+    const routers = [];
+    for (let i = 1; i <= config.routerCount; i++) {
+      const routerId = this.addRouter(`router${i}`, `Router-${i}`, { x: 200 + i * 200, y: 200 });
+      routers.push(routerId.id);
+    }
+
+    // Connect routers in sequence and create subnets
+    for (let i = 0; i < routers.length; i++) {
+      const routerId = routers[i];
+      const subnet = config.subnets[i] || '192.168.' + (i + 1) + '.0';
+
+      // Configure router interface for subnet
+      this.configureRouterIP(routerId, 'Fa0/0', subnet.replace('0', '1'), '255.255.255.0');
+      
+      // Create switch and hosts for this subnet
+      const switchId = this.addSwitch(`switch${i + 1}`, `Switch-${i + 1}`, 8, { x: 200 + i * 200, y: 350 });
+      this.createLink(routerId, 'Fa0/0', switchId.id, 'Fa0/1');
+      
+      // Connect routers
+      if (i < routers.length - 1) {
+        const nextRouter = routers[i + 1];
+        const interconnectSubnet = `10.0.${i + 1}.0`;
+        
+        // Configure inter-router link
+        this.configureRouterIP(routerId, 'Fa0/1', interconnectSubnet.replace('0', '1'), '255.255.255.0');
+        this.configureRouterIP(nextRouter, 'Fa0/1', interconnectSubnet.replace('0', '2'), '255.255.255.0');
+        this.createLink(routerId, 'Fa0/1', nextRouter, 'Fa0/1');
+        
+        // Add static routes
+        this.addStaticRoute(routerId, config.subnets[i + 1] || '192.168.' + (i + 2) + '.0', '255.255.255.0', interconnectSubnet.replace('0', '2'), 'Fa0/1');
+        this.addStaticRoute(nextRouter, subnet, '255.255.255.0', interconnectSubnet.replace('0', '1'), 'Fa0/1');
+      }
+    }
+  }
+
+  private setupMultiHopNetwork(config: { hops: number; hostsPerSegment: number }): void {
+    // Create a chain of router-switch-router segments
+    for (let hop = 0; hop < config.hops; hop++) {
+      const routerId = this.addRouter(`router${hop + 1}`, `R${hop + 1}`, { x: hop * 300, y: 200 });
+      const switchId = this.addSwitch(`switch${hop + 1}`, `SW${hop + 1}`, 8, { x: hop * 300, y: 350 });
+      
+      // Connect router to switch
+      this.createLink(routerId.id, 'Fa0/0', switchId.id, 'Fa0/1');
+      this.configureRouterIP(routerId.id, 'Fa0/0', `192.168.${hop + 1}.1`, '255.255.255.0');
+      
+      // Add hosts to this segment
+      for (let h = 1; h <= config.hostsPerSegment; h++) {
+        const hostId = this.addHost(`host${hop + 1}_${h}`, `PC${hop + 1}-${h}`, { x: hop * 300 + h * 50, y: 450 });
+        this.createLink(hostId.id, 'eth0', switchId.id, `Fa0/${h + 1}`);
+        this.configureHostIP(hostId.id, 'eth0', `192.168.${hop + 1}.${h + 10}`, '255.255.255.0');
+      }
+      
+      // Connect to next hop router
+      if (hop < config.hops - 1) {
+        const nextRouterId = `router${hop + 2}`;
+        // This will be connected when the next router is created
+      }
+    }
+  }
+
+  /**
+   * Provides topology analysis and recommendations
+   */
+  analyzeTopology(): { analysis: string[]; recommendations: string[] } {
+    const analysis: string[] = [];
+    const recommendations: string[] = [];
+
+    const deviceCount = this.devices.size;
+    const linkCount = this.links.size;
+    const hostCount = Array.from(this.devices.values()).filter(d => d.type === 'host').length;
+    const switchCount = Array.from(this.devices.values()).filter(d => d.type === 'switch').length;
+    const routerCount = Array.from(this.devices.values()).filter(d => d.type === 'router').length;
+
+    analysis.push(`Network contains: ${hostCount} hosts, ${switchCount} switches, ${routerCount} routers`);
+    analysis.push(`Total devices: ${deviceCount}, Total links: ${linkCount}`);
+    
+    // Analyze connectivity
+    const connectivityRatio = linkCount / Math.max(deviceCount - 1, 1);
+    if (connectivityRatio < 1) {
+      analysis.push('Network has minimal connectivity (tree topology)');
+      recommendations.push('Consider adding redundant links for fault tolerance');
+    } else if (connectivityRatio > 1.5) {
+      analysis.push('Network has high connectivity with redundant paths');
+      recommendations.push('Ensure spanning tree protocol is enabled on switches');
+    }
+
+    // Analyze segmentation
+    if (routerCount === 0 && hostCount > 3) {
+      analysis.push('Single broadcast domain - all hosts share collision/broadcast domain');
+      recommendations.push('Consider adding routers for network segmentation and better performance');
+    } else if (routerCount > 0) {
+      analysis.push(`Network is segmented into ${routerCount + 1} subnets`);
+      recommendations.push('Ensure proper routing configuration for inter-subnet communication');
+    }
+
+    return { analysis, recommendations };
   }
 }

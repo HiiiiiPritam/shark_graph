@@ -16,7 +16,7 @@ export interface NetworkInterface {
   ipAddress?: IPAddress;
   isUp: boolean;
   speed: number; // Mbps
-  connectedTo?: string; // Connected device interface ID
+  connectedTo?: { deviceId: string; interfaceName: string } | string; // Connected device info
 }
 
 // OSI Layer 2 - Ethernet Frame
@@ -111,6 +111,8 @@ export interface ARPEntry {
   interface: string;
   type: 'static' | 'dynamic';
   age: number; // seconds
+  isStatic?: boolean; // for compatibility
+  expirationTime?: number; // optional timestamp for dynamic entries
 }
 
 // MAC Address Table Entry (for switches)
@@ -128,7 +130,7 @@ export interface PacketTrace {
   deviceId: string;
   deviceName: string;
   deviceType: 'host' | 'switch' | 'router';
-  action: 'received' | 'forwarded' | 'dropped' | 'generated';
+  action: string; // Flexible to allow educational action descriptions like "🎯 Ping Initiated", "🧭 Route Decision", etc.
   incomingInterface?: string;
   outgoingInterface?: string;
   packet: EthernetFrame;

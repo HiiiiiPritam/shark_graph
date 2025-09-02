@@ -21,6 +21,24 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
 
   useEffect(() => {
     console.log(`🔍 PacketAnalyzer: Received ${traces.length} traces:`, traces);
+    
+    // Debug ARP traces specifically
+    const arpTraces = traces.filter(t => {
+      const hasARP = t.packet?.etherType === 0x0806 || 
+                    (t.packet?.payload && 'operation' in (t.packet.payload as any)) ||
+                    t.decision?.includes('ARP');
+      if (hasARP) {
+        console.log('🔍 PacketAnalyzer: Found ARP trace:', {
+          decision: t.decision,
+          etherType: t.packet?.etherType,
+          etherTypeHex: t.packet?.etherType?.toString(16),
+          payload: t.packet?.payload
+        });
+      }
+      return hasARP;
+    });
+    console.log(`🔍 PacketAnalyzer: Found ${arpTraces.length} ARP-related traces`);
+    
     applyFilter();
   }, [traces, filter]);
 
@@ -114,16 +132,48 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
   };
 
   const getPacketProtocol = (packet: EthernetFrame): string => {
+    // Enhanced debugging for protocol detection
+    console.log('🔍 PacketAnalyzer getPacketProtocol: Analyzing packet:', {
+      etherType: packet?.etherType,
+      etherTypeHex: packet?.etherType?.toString(16),
+      hasPayload: !!packet?.payload,
+      payloadType: typeof packet?.payload,
+      payloadKeys: packet?.payload ? Object.keys(packet.payload) : null
+    });
+
+    // Check for ARP (0x0806)
+    if (packet?.etherType === 0x0806) {
+      console.log('🔍 PacketAnalyzer: ✅ ARP packet detected via etherType!', packet);
+      return 'ARP';
+    } 
+    
+    // Check for IPv4 (0x0800)
     if (packet?.etherType === 0x0800 && packet.payload) {
       const ipPacket = packet.payload as IPPacket;
-      return NetworkStack.parseIPProtocol(ipPacket?.protocol);
-    } else if (packet?.etherType === 0x0806) {
+      const protocol = NetworkStack.parseIPProtocol(ipPacket?.protocol);
+      console.log('🔍 PacketAnalyzer: ✅ IPv4 packet detected, protocol:', protocol);
+      return protocol;
+    } 
+    
+    // Fallback: Check if this might be an ARP packet with missing etherType
+    if (packet?.payload && typeof packet.payload === 'object' && 'operation' in packet.payload) {
+      console.log('🔍 PacketAnalyzer: ⚠️ ARP packet detected via payload inspection (etherType incorrect):', packet.etherType, packet);
       return 'ARP';
     }
-    return NetworkStack.parseEtherType(packet?.etherType);
+
+    // Default fallback
+    const fallback = NetworkStack.parseEtherType(packet?.etherType);
+    console.log('🔍 PacketAnalyzer: Using fallback protocol detection:', fallback, 'for etherType:', packet?.etherType);
+    return fallback;
   };
 
   const getPacketInfo = (trace: PacketTrace): string => {
+    // Use the educational decision text if available, otherwise fall back to old format
+    if (trace.decision) {
+      return trace.decision;
+    }
+
+    // Fallback for older traces without decision field
     const packet = trace.packet;
     const actionEmoji = {
       'received': '📥',
@@ -282,24 +332,37 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
     return (
       <div className="p-4">
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
-          <h2 className="font-semibold mb-2 text-gray-900">Step {selectedPacket.stepNumber}: Packet Journey at {selectedPacket.deviceName}</h2>
+          <h2 className="font-semibold mb-2 text-gray-900">🚀 Step {selectedPacket.stepNumber}: Network Journey</h2>
           <div className="mb-3 p-2 bg-white rounded border">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className="text-lg">
                 {{
                   'received': '📥',
                   'forwarded': '🔄', 
                   'generated': '📤',
                   'dropped': '❌',
-                  'processed': '⚙️'
+                  'processed': '⚙️',
+                  '🎯 Ping Initiated': '🎯',
+                  '🧭 Route Decision': '🧭',
+                  '🚪 Gateway Required': '🚪',
+                  '📡 ARP Resolution': '📡',
+                  '🗺️ Routing Table Lookup': '🗺️',
+                  '✅ Route Found': '✅',
+                  '🚀 Packet Forwarded': '🚀',
+                  '📥 Packet Received': '📥',
+                  '💬 Reply Generated': '💬',
+                  '✅ Ping Successful': '✅'
                 }[selectedPacket.action] || '📄'}
               </span>
-              <span className="font-medium text-gray-900 capitalize">{selectedPacket.action}</span>
-              <span className="text-gray-600">by</span>
+              <span className="font-medium text-gray-900">{selectedPacket.action.replace(/^[🎯🧭🚪📡🗺️✅🚀📥💬❌⚙️🔄📤]+\s*/, '')}</span>
+              <span className="text-gray-600">at</span>
               <span className="font-bold text-blue-600">{selectedPacket.deviceName}</span>
-              <span className="text-gray-500">({selectedPacket.deviceType})</span>
+              <span className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">{selectedPacket.deviceType.toUpperCase()}</span>
             </div>
-            <div className="text-sm text-gray-700 italic">{selectedPacket.decision}</div>
+            <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded border-l-4 border-blue-400">
+              <div className="font-medium text-gray-800 mb-1">Educational Details:</div>
+              <div>{selectedPacket.decision}</div>
+            </div>
           </div>
           
           <div className="grid grid-cols-2 gap-3 text-sm">
@@ -343,15 +406,44 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
         {selectedPacket.routingTableUsed && (
           <div className="mb-4">
             <div className="bg-indigo-100 p-2">
-              <h3 className="font-semibold text-gray-900">Routing Information Used</h3>
+              <h3 className="font-semibold text-gray-900">🗺️ Routing Decision Details</h3>
             </div>
             <div className="bg-gray-50 p-3 border border-indigo-200">
-              <div className="text-sm">
-                <div><span className="font-medium text-gray-700">Destination:</span> <span className="text-gray-900 font-mono">{selectedPacket.routingTableUsed.destinationNetwork.address}/{selectedPacket.routingTableUsed.subnetMask}</span></div>
-                <div><span className="font-medium text-gray-700">Next Hop:</span> <span className="text-gray-900 font-mono">{selectedPacket.routingTableUsed.nextHop.address}</span></div>
-                <div><span className="font-medium text-gray-700">Interface:</span> <span className="text-gray-900">{selectedPacket.routingTableUsed.interface}</span></div>
-                <div><span className="font-medium text-gray-700">Metric:</span> <span className="text-gray-900">{selectedPacket.routingTableUsed.metric}</span></div>
-                <div><span className="font-medium text-gray-700">Protocol:</span> <span className="text-gray-900">{selectedPacket.routingTableUsed.protocol}</span></div>
+              <div className="text-sm grid grid-cols-1 gap-2">
+                <div><span className="font-medium text-gray-700">Destination Network:</span> <span className="text-gray-900 font-mono">{selectedPacket.routingTableUsed.destinationNetwork.address}/{NetworkStack.getPrefixLength(selectedPacket.routingTableUsed.subnetMask)}</span></div>
+                <div><span className="font-medium text-gray-700">Next Hop:</span> <span className="text-gray-900 font-mono">{selectedPacket.routingTableUsed.nextHop.address === '0.0.0.0' ? 'Directly Connected' : selectedPacket.routingTableUsed.nextHop.address}</span></div>
+                <div><span className="font-medium text-gray-700">Exit Interface:</span> <span className="text-gray-900 font-mono">{selectedPacket.routingTableUsed.interface}</span></div>
+                <div><span className="font-medium text-gray-700">Route Metric:</span> <span className="text-gray-900">{selectedPacket.routingTableUsed.metric} (lower = better)</span></div>
+                <div><span className="font-medium text-gray-700">Route Source:</span> <span className="text-gray-900 capitalize">{selectedPacket.routingTableUsed.protocol}</span></div>
+                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                  <div className="text-blue-800 text-xs font-medium">Routing Logic:</div>
+                  <div className="text-blue-700 text-xs">
+                    Router used longest prefix match to find this /{NetworkStack.getPrefixLength(selectedPacket.routingTableUsed.subnetMask)} route, 
+                    then forwarded packet {selectedPacket.routingTableUsed.nextHop.address === '0.0.0.0' ? 'directly to the destination subnet' : 'to the next-hop router'}.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {selectedPacket.arpTableUsed && (
+          <div className="mb-4">
+            <div className="bg-purple-100 p-2">
+              <h3 className="font-semibold text-gray-900">📡 ARP Resolution Used</h3>
+            </div>
+            <div className="bg-gray-50 p-3 border border-purple-200">
+              <div className="text-sm grid grid-cols-1 gap-2">
+                <div><span className="font-medium text-gray-700">Resolved IP:</span> <span className="text-gray-900 font-mono">{selectedPacket.arpTableUsed.ipAddress.address}</span></div>
+                <div><span className="font-medium text-gray-700">MAC Address:</span> <span className="text-gray-900 font-mono">{selectedPacket.arpTableUsed.macAddress.address}</span></div>
+                <div><span className="font-medium text-gray-700">Interface:</span> <span className="text-gray-900">{selectedPacket.arpTableUsed.interface}</span></div>
+                <div><span className="font-medium text-gray-700">Entry Type:</span> <span className="text-gray-900">{selectedPacket.arpTableUsed.isStatic ? 'Static' : 'Dynamic'}</span></div>
+                <div className="mt-2 p-2 bg-purple-50 border border-purple-200 rounded">
+                  <div className="text-purple-800 text-xs font-medium">ARP Process:</div>
+                  <div className="text-purple-700 text-xs">
+                    Device resolved Layer 3 IP address to Layer 2 MAC address for frame delivery. This MAC address is now cached for future use.
+                  </div>
+                </div>
               </div>
             </div>
           </div>

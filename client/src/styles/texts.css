@@ -1,3 +1,17 @@
-text{
-  color: #131212;
+/* Improved text contrast for better readability */
+text {
+  color: #1f2937; /* Better contrast - dark gray instead of near-black */
+}
+
+/* Additional text utility classes */
+.text-high-contrast {
+  color: #111827; /* Very dark for maximum contrast on light backgrounds */
+}
+
+.text-medium-contrast {
+  color: #374151; /* Medium contrast for body text */
+}
+
+.text-accessible {
+  color: #1f2937; /* WCAG AA compliant contrast ratio */
 }

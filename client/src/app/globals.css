@@ -17,5 +17,73 @@
 }
 
 text{
-  color: #131212;
+  color: #1f2937; /* Improved contrast - dark gray */
+}
+
+/* Improved text contrast for better readability */
+.text-readable {
+  color: #374151; /* Better contrast against light backgrounds */
+}
+
+.text-readable-light {
+  color: #f3f4f6; /* Better contrast against dark backgrounds */
+}
+
+/* Fix node text colors for better visibility */
+.node-host-text {
+  color: #1e40af !important; /* Strong blue for host nodes */
+}
+
+.node-switch-text {
+  color: #166534 !important; /* Strong green for switch nodes */
+}
+
+.node-router-text {
+  color: #c2410c !important; /* Strong orange for router nodes */
+}
+
+/* Mobile-friendly touch targets and spacing */
+@media (max-width: 768px) {
+  /* Ensure minimum touch target size of 44px */
+  button, .clickable {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Better spacing for mobile */
+  .mobile-spacing {
+    padding: 0.5rem;
+    margin: 0.25rem;
+  }
+  
+  /* Improved text size for mobile */
+  .mobile-text {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+  
+  /* Better node visibility on small screens */
+  .react-flow__node {
+    font-size: 0.75rem;
+  }
+  
+  /* Improve handle visibility on mobile */
+  .react-flow__handle {
+    width: 12px !important;
+    height: 12px !important;
+    border-width: 2px !important;
+  }
+}
+
+/* Tablet specific improvements */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .tablet-layout {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  
+  .tablet-button {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+  }
 }

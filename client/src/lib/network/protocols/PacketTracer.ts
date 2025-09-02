@@ -22,48 +22,52 @@ export class PacketTracer {
     return ++this.currentStepNumber;
   }
 
-  getLastTrace(): PacketTrace | null {
-    return this.traces.length > 0 ? this.traces[this.traces.length - 1] : null;
-  }
 
-  getTracesByDevice(deviceId: string): PacketTrace[] {
-    return this.traces.filter(trace => trace.deviceId === deviceId);
-  }
+  //remove
+  // getLastTrace(): PacketTrace | null {
+  //   return this.traces.length > 0 ? this.traces[this.traces.length - 1] : null;
+  // }
+  //remove
+  // getTracesByDevice(deviceId: string): PacketTrace[] {
+  //   return this.traces.filter(trace => trace.deviceId === deviceId);
+  // }
 
-  getTracesByPacket(packetId: string): PacketTrace[] {
-    return this.traces.filter(trace => trace.packet.id === packetId);
-  }
 
-  exportTraces(): string {
-    let output = 'Packet Trace Analysis\n';
-    output += '====================\n\n';
+  // getTracesByPacket(packetId: string): PacketTrace[] {
+  //   return this.traces.filter(trace => trace.packet.id === packetId);
+  // }
 
-    this.traces.forEach((trace, index) => {
-      output += `Step ${trace.stepNumber}: ${trace.deviceName} (${trace.deviceType})\n`;
-      output += `  Action: ${trace.action}\n`;
-      output += `  Time: ${new Date(trace.timestamp).toISOString()}\n`;
-      output += `  Decision: ${trace.decision}\n`;
+  //remove
+  // exportTraces(): string {
+  //   let output = 'Packet Trace Analysis\n';
+  //   output += '====================\n\n';
+
+  //   this.traces.forEach((trace, index) => {
+  //     output += `Step ${trace.stepNumber}: ${trace.deviceName} (${trace.deviceType})\n`;
+  //     output += `  Action: ${trace.action}\n`;
+  //     output += `  Time: ${new Date(trace.timestamp).toISOString()}\n`;
+  //     output += `  Decision: ${trace.decision}\n`;
       
-      if (trace.incomingInterface) {
-        output += `  Incoming Interface: ${trace.incomingInterface}\n`;
-      }
+  //     if (trace.incomingInterface) {
+  //       output += `  Incoming Interface: ${trace.incomingInterface}\n`;
+  //     }
       
-      if (trace.outgoingInterface) {
-        output += `  Outgoing Interface: ${trace.outgoingInterface}\n`;
-      }
+  //     if (trace.outgoingInterface) {
+  //       output += `  Outgoing Interface: ${trace.outgoingInterface}\n`;
+  //     }
 
-      if (trace.routingTableUsed) {
-        output += `  Route Used: ${trace.routingTableUsed.destinationNetwork.address}/${trace.routingTableUsed.subnetMask} via ${trace.routingTableUsed.nextHop.address}\n`;
-      }
+  //     if (trace.routingTableUsed) {
+  //       output += `  Route Used: ${trace.routingTableUsed.destinationNetwork.address}/${trace.routingTableUsed.subnetMask} via ${trace.routingTableUsed.nextHop.address}\n`;
+  //     }
 
-      if (trace.arpTableUsed) {
-        output += `  ARP Entry Used: ${trace.arpTableUsed.ipAddress.address} -> ${trace.arpTableUsed.macAddress.address}\n`;
-      }
+  //     if (trace.arpTableUsed) {
+  //       output += `  ARP Entry Used: ${trace.arpTableUsed.ipAddress.address} -> ${trace.arpTableUsed.macAddress.address}\n`;
+  //     }
 
-      output += `  Packet: ${trace.packet.sourceMac.address} -> ${trace.packet.destinationMac.address}\n`;
-      output += '\n';
-    });
+  //     output += `  Packet: ${trace.packet.sourceMac.address} -> ${trace.packet.destinationMac.address}\n`;
+  //     output += '\n';
+  //   });
 
-    return output;
-  }
+  //   return output;
+  // }
 }

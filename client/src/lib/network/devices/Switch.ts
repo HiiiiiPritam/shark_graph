@@ -80,37 +80,104 @@ export class Switch implements SwitchInterface {
   async receiveFrame(frame: EthernetFrame, incomingInterface: string): Promise<void> {
     if (this.status === 'down') return;
 
-    // 1. Learn source MAC address
-    this.learnMACAddress(frame.sourceMac, incomingInterface);
+    console.log(`🔍 Switch ${this.name}: *** RECEIVEFRAME CALLED *** Received frame on ${incomingInterface}`);
+    console.log(`🔍 Switch ${this.name}: Source MAC: ${frame.sourceMac.address}, Dest MAC: ${frame.destinationMac.address}`);
+    console.log(`🔍 Switch ${this.name}: Current MAC table:`, this.macAddressTable.map(e => `${e.macAddress.address} -> ${e.port}`));
+    console.log(`🔍 Switch ${this.name}: About to create detailed traces...`);
 
-    // 2. Check if destination is broadcast or multicast
+    // Step 1: Frame Reception Trace
+    const receptionTrace: PacketTrace = {
+      stepNumber: this.packetTracer.getNextStepNumber(),
+      deviceId: this.id,
+      deviceName: this.name,
+      deviceType: 'switch',
+      action: 'received',
+      incomingInterface,
+      packet: frame,
+      timestamp: performance.now(), // Use high-precision timestamp
+      decision: `📥 Frame received on port ${incomingInterface}. Source MAC: ${frame.sourceMac.address}, Destination MAC: ${frame.destinationMac.address}. Beginning Layer 2 processing...`,
+    };
+    this.packetTracer.addTrace(receptionTrace);
+
+    // Step 2: MAC Address Learning
+    const wasLearned = this.learnMACAddressWithTrace(frame.sourceMac, incomingInterface, frame);
+
+    // Step 3: Destination MAC Analysis
     if (this.isBroadcastOrMulticast(frame.destinationMac)) {
+      const broadcastTrace: PacketTrace = {
+        stepNumber: this.packetTracer.getNextStepNumber(),
+        deviceId: this.id,
+        deviceName: this.name,
+        deviceType: 'switch',
+        action: 'processed',
+        incomingInterface,
+        packet: frame,
+        timestamp: performance.now(), // Use high-precision timestamp
+        decision: `🔍 Destination analysis: ${frame.destinationMac.address} is ${frame.destinationMac.address === 'ff:ff:ff:ff:ff:ff' ? 'BROADCAST' : 'MULTICAST'}. Must flood to all ports except incoming.`,
+      };
+      this.packetTracer.addTrace(broadcastTrace);
+      
+      console.log(`🔍 Switch ${this.name}: Broadcasting frame (broadcast/multicast MAC)`);
       await this.floodFrame(frame, incomingInterface);
       return;
     }
 
-    // 3. Look up destination MAC in MAC address table
+    // Step 4: MAC Address Table Lookup
     const destinationPort = this.lookupMACAddress(frame.destinationMac);
+    const lookupTrace: PacketTrace = {
+      stepNumber: this.packetTracer.getNextStepNumber(),
+      deviceId: this.id,
+      deviceName: this.name,
+      deviceType: 'switch',
+      action: 'processed',
+      incomingInterface,
+      packet: frame,
+      timestamp: performance.now(), // Use high-precision timestamp
+      decision: destinationPort 
+        ? `✅ MAC table lookup: Found ${frame.destinationMac.address} on port ${destinationPort}. Can forward directly (unicast).`
+        : `❓ MAC table lookup: ${frame.destinationMac.address} not found in MAC table (${this.macAddressTable.length} entries). Must flood to learn location.`,
+      macTableUsed: destinationPort ? this.macAddressTable.find(e => e.macAddress.address === frame.destinationMac.address) : undefined,
+    };
+    this.packetTracer.addTrace(lookupTrace);
 
     if (destinationPort) {
-      // Unicast - forward to specific port
+      console.log(`🔍 Switch ${this.name}: Forwarding unicast to port ${destinationPort}`);
       await this.forwardFrame(frame, destinationPort, incomingInterface);
     } else {
-      // Unknown unicast - flood to all ports except incoming
+      console.log(`🔍 Switch ${this.name}: FLOODING frame - destination MAC ${frame.destinationMac.address} not in MAC table`);
       await this.floodFrame(frame, incomingInterface);
     }
   }
 
-  // MAC Address Learning
-  private learnMACAddress(sourceMac: MACAddress, port: string): void {
+  // MAC Address Learning with detailed tracing
+  private learnMACAddressWithTrace(sourceMac: MACAddress, port: string, frame: EthernetFrame): boolean {
     const existingEntry = this.macAddressTable.find(
       entry => entry.macAddress.address === sourceMac.address
     );
 
+    let wasNewlyLearned = false;
+    let learningTrace: PacketTrace;
+
     if (existingEntry) {
       // Update existing entry
+      const portChanged = existingEntry.port !== port;
       existingEntry.port = port;
       existingEntry.age = 0;
+      
+      learningTrace = {
+        stepNumber: this.packetTracer.getNextStepNumber(),
+        deviceId: this.id,
+        deviceName: this.name,
+        deviceType: 'switch',
+        action: 'processed',
+        incomingInterface: port,
+        packet: frame, // Use the actual frame for proper trace display
+        timestamp: performance.now(), // Use high-precision timestamp
+        decision: portChanged 
+          ? `🔄 MAC learning: Updated ${sourceMac.address} location to port ${port} (previously on different port). MAC table now has ${this.macAddressTable.length} entries.`
+          : `✅ MAC learning: Confirmed ${sourceMac.address} still on port ${port}. Entry refreshed in MAC table.`,
+      };
+      console.log(`🔍 Switch ${this.name}: Updated MAC ${sourceMac.address} on port ${port}`);
     } else {
       // Add new entry
       const newEntry: MACTableEntry = {
@@ -122,7 +189,42 @@ export class Switch implements SwitchInterface {
       };
       
       this.macAddressTable.push(newEntry);
+      wasNewlyLearned = true;
+      
+      learningTrace = {
+        stepNumber: this.packetTracer.getNextStepNumber(),
+        deviceId: this.id,
+        deviceName: this.name,
+        deviceType: 'switch',
+        action: 'processed',
+        incomingInterface: port,
+        packet: frame,
+        timestamp: performance.now(), // Use high-precision timestamp
+        decision: `📚 MAC learning: NEW device learned! ${sourceMac.address} is connected to port ${port}. MAC table now has ${this.macAddressTable.length} entries.`,
+      };
+      console.log(`🔍 Switch ${this.name}: Learned NEW MAC ${sourceMac.address} on port ${port}`);
     }
+
+    this.packetTracer.addTrace(learningTrace);
+    return wasNewlyLearned;
+  }
+
+  private generateFrameId(): string {
+    return `frame_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  // MAC Address Learning (legacy method kept for compatibility)
+  private learnMACAddress(sourceMac: MACAddress, port: string): void {
+    // Create a simple frame for compatibility
+    const frame: EthernetFrame = {
+      id: this.generateFrameId(),
+      sourceMac: sourceMac,
+      destinationMac: { address: 'ff:ff:ff:ff:ff:ff' },
+      etherType: 0x0800,
+      payload: {} as any,
+      timestamp: performance.now(), // Use high-precision timestamp
+    };
+    this.learnMACAddressWithTrace(sourceMac, port, frame);
   }
 
   // MAC Address Lookup
@@ -145,12 +247,17 @@ export class Switch implements SwitchInterface {
         action: 'dropped',
         incomingInterface: incomingPort,
         packet: frame,
-        timestamp: Date.now(),
-        decision: `Dropped frame - would create loop (incoming and outgoing port same: ${outgoingPort})`,
+        timestamp: performance.now(), // Use high-precision timestamp
+        decision: `❌ Loop prevention: Cannot forward frame back out same port (${outgoingPort}). This prevents Layer 2 loops and broadcast storms.`,
       };
       this.packetTracer.addTrace(loopTrace);
       return;
     }
+
+    // Get protocol information for educational trace
+    const protocolInfo = frame.etherType === 0x0800 ? 'IPv4' : 
+                        frame.etherType === 0x0806 ? 'ARP' : 
+                        `Protocol 0x${frame.etherType.toString(16)}`;
 
     const forwardTrace: PacketTrace = {
       stepNumber: this.packetTracer.getNextStepNumber(),
@@ -161,8 +268,8 @@ export class Switch implements SwitchInterface {
       incomingInterface: incomingPort,
       outgoingInterface: outgoingPort,
       packet: frame,
-      timestamp: Date.now(),
-      decision: `Forwarding to ${frame.destinationMac.address} via port ${outgoingPort}`,
+      timestamp: performance.now(), // Use high-precision timestamp
+      decision: `🚀 Unicast forwarding: Sending ${protocolInfo} frame to ${frame.destinationMac.address} via port ${outgoingPort}. Layer 2 switching complete - no routing needed.`,
       macTableUsed: this.macAddressTable.find(e => e.macAddress.address === frame.destinationMac.address),
     };
     this.packetTracer.addTrace(forwardTrace);
@@ -177,6 +284,18 @@ export class Switch implements SwitchInterface {
       iface => iface.isUp && iface.name !== incomingPort && iface.connectedTo
     );
 
+    // Determine the reason for flooding
+    const floodReason = frame.destinationMac.address === 'ff:ff:ff:ff:ff:ff' 
+      ? 'BROADCAST destination (ARP request, DHCP, etc.)'
+      : frame.destinationMac.address.startsWith('01:00:5e') 
+        ? 'MULTICAST destination (group communication)'
+        : 'UNKNOWN UNICAST (destination not in MAC table)';
+
+    // Get protocol information for educational trace
+    const protocolInfo = frame.etherType === 0x0800 ? 'IPv4' : 
+                        frame.etherType === 0x0806 ? 'ARP' : 
+                        `Protocol 0x${frame.etherType.toString(16)}`;
+
     const floodTrace: PacketTrace = {
       stepNumber: this.packetTracer.getNextStepNumber(),
       deviceId: this.id,
@@ -185,13 +304,27 @@ export class Switch implements SwitchInterface {
       action: 'forwarded',
       incomingInterface: incomingPort,
       packet: frame,
-      timestamp: Date.now(),
-      decision: `Flooding frame to ${activePorts.length} ports (excluding incoming port ${incomingPort})`,
+      timestamp: performance.now(), // Use high-precision timestamp
+      decision: `🌊 Flooding ${protocolInfo} frame: ${floodReason}. Sending to ${activePorts.length} connected ports (excluding ${incomingPort}): ${activePorts.map(p => p.name).join(', ')}.`,
     };
     this.packetTracer.addTrace(floodTrace);
 
     // Send frame out all active ports except the incoming port
     for (const port of activePorts) {
+      // Add individual transmission trace for each port (useful for complex topologies)
+      const transmissionTrace: PacketTrace = {
+        stepNumber: this.packetTracer.getNextStepNumber(),
+        deviceId: this.id,
+        deviceName: this.name,
+        deviceType: 'switch',
+        action: 'generated',
+        outgoingInterface: port.name,
+        packet: frame,
+        timestamp: performance.now(), // Use high-precision timestamp
+        decision: `📤 Transmitting flooded ${protocolInfo} frame out port ${port.name} to ${port.connectedTo && typeof port.connectedTo === 'object' && 'deviceName' in port.connectedTo ? (port.connectedTo as any).deviceName : 'connected device'}.`,
+      };
+      this.packetTracer.addTrace(transmissionTrace);
+      
       await this.transmitFrame(frame, port.name);
     }
   }
@@ -274,6 +407,11 @@ export class Switch implements SwitchInterface {
     console.log(`Switch ${this.name}: Dynamic MAC addresses cleared`);
   }
 
+  // Debugging method to manually learn a MAC address
+  public learnMAC(macAddress: MACAddress, port: string): void {
+    this.learnMACAddress(macAddress, port);
+  }
+
   addStaticMACEntry(mac: MACAddress, port: string, vlan: number = 1): void {
     // Remove any existing entry for this MAC
     this.macAddressTable = this.macAddressTable.filter(
@@ -293,14 +431,27 @@ export class Switch implements SwitchInterface {
 
   // Helper Methods
   private isBroadcastOrMulticast(mac: MACAddress): boolean {
+    const macLower = mac.address.toLowerCase();
+    
     // Broadcast
-    if (mac.address.toLowerCase() === 'ff:ff:ff:ff:ff:ff') {
+    if (macLower === 'ff:ff:ff:ff:ff:ff') {
       return true;
     }
     
-    // Multicast (least significant bit of first octet is 1)
-    const firstOctet = parseInt(mac.address.split(':')[0], 16);
-    return (firstOctet & 1) === 1;
+    // Standard multicast ranges (more precise than just LSB check)
+    // IPv4 multicast: 01:00:5e:xx:xx:xx
+    if (macLower.startsWith('01:00:5e:')) {
+      return true;
+    }
+    
+    // IPv6 multicast: 33:33:xx:xx:xx:xx  
+    if (macLower.startsWith('33:33:')) {
+      return true;
+    }
+    
+    // Don't treat randomly generated unicast MACs as multicast
+    // Only use LSB check for well-known multicast ranges
+    return false;
   }
 
   private async transmitFrame(frame: EthernetFrame, outgoingPort: string): Promise<void> {
@@ -377,5 +528,15 @@ export class Switch implements SwitchInterface {
   getStatus(): string {
     const activePorts = this.interfaces.filter(i => i.isUp).length;
     return `Switch ${this.name} (${this.status}) - Ports: ${activePorts}/${this.interfaces.length} up - MAC entries: ${this.macAddressTable.length}`;
+  }
+
+  // Get all packet traces from this device
+  getTraces(): PacketTrace[] {
+    return this.packetTracer.getTraces();
+  }
+
+  // Clear packet traces from this device  
+  clearTraces(): void {
+    this.packetTracer.clearTraces();
   }
 }

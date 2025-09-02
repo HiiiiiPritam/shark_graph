@@ -7,26 +7,27 @@ import '@/styles/animation.css';
 export default function Home() {
   return (
     <div className="relative min-h-screen bg-gray-900 text-white overflow-hidden">
-      <div className="relative z-10 p-8 max-w-7xl mx-auto">
-        <header className="mb-12 text-center">
-          <h1 className="text-4xl md:text-6xl font-bold text-cyan-400 animate-flicker flex items-center justify-center gap-3 mb-4">
-            <FaRocket className="animate-bounce" /> Shark3
+      <div className="relative z-10 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+        <header className="mb-8 sm:mb-12 text-center">
+          <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold text-cyan-400 animate-flicker flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 mb-4">
+            <FaRocket className="animate-bounce text-2xl sm:text-3xl md:text-5xl" /> 
+            <span>Shark3</span>
           </h1>
-          <p className="text-xl text-gray-300 max-w-3xl mx-auto">
+          <p className="text-lg sm:text-xl text-gray-300 max-w-3xl mx-auto px-4">
             Comprehensive Network Simulation and Learning Platform
           </p>
-          <p className="text-gray-400 mt-2">
+          <p className="text-gray-400 mt-2 px-4 text-sm sm:text-base">
             Choose your learning mode below to start exploring networking concepts
           </p>
         </header>
 
-        <div className="grid md:grid-cols-3 gap-8 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 mb-8">
           {/* Realistic Network Lab */}
           <Link href="/realistic" className="group">
-            <div className="bg-gray-800 rounded-lg p-6 border-2 border-green-500 hover:border-green-400 transition-all duration-300 hover:shadow-lg hover:shadow-green-500/20 h-full">
+            <div className="bg-gray-800 rounded-lg p-4 sm:p-6 border-2 border-green-500 hover:border-green-400 transition-all duration-300 hover:shadow-lg hover:shadow-green-500/20 h-full">
               <div className="text-center mb-4">
-                <FaNetworkWired className="text-5xl text-green-500 mx-auto mb-3 group-hover:scale-110 transition-transform" />
-                <h2 className="text-2xl font-bold text-green-400 mb-2">Realistic Network Lab</h2>
+                <FaNetworkWired className="text-4xl sm:text-5xl text-green-500 mx-auto mb-3 group-hover:scale-110 transition-transform" />
+                <h2 className="text-xl sm:text-2xl font-bold text-green-400 mb-2">Realistic Network Lab</h2>
               </div>
               <div className="space-y-3 text-gray-300 mb-6">
                 <p className="text-sm">🔧 <strong>Full protocol implementation</strong></p>
@@ -44,10 +45,10 @@ export default function Home() {
 
           {/* Basic Simulation */}
           <Link href="/simulation" className="group">
-            <div className="bg-gray-800 rounded-lg p-6 border-2 border-cyan-500 hover:border-cyan-400 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/20 h-full">
+            <div className="bg-gray-800 rounded-lg p-4 sm:p-6 border-2 border-cyan-500 hover:border-cyan-400 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/20 h-full">
               <div className="text-center mb-4">
-                <FaDesktop className="text-5xl text-cyan-500 mx-auto mb-3 group-hover:scale-110 transition-transform" />
-                <h2 className="text-2xl font-bold text-cyan-400 mb-2">Basic Simulation</h2>
+                <FaDesktop className="text-4xl sm:text-5xl text-cyan-500 mx-auto mb-3 group-hover:scale-110 transition-transform" />
+                <h2 className="text-xl sm:text-2xl font-bold text-cyan-400 mb-2">Basic Simulation</h2>
               </div>
               <div className="space-y-3 text-gray-300 mb-6">
                 <p className="text-sm">🎓 <strong>Beginner-friendly</strong></p>
@@ -65,10 +66,10 @@ export default function Home() {
 
           {/* Docker Lab */}
           <Link href="/docker" className="group">
-            <div className="bg-gray-800 rounded-lg p-6 border-2 border-blue-500 hover:border-blue-400 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/20 h-full">
+            <div className="bg-gray-800 rounded-lg p-4 sm:p-6 border-2 border-blue-500 hover:border-blue-400 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/20 h-full">
               <div className="text-center mb-4">
-                <FaDocker className="text-5xl text-blue-500 mx-auto mb-3 group-hover:scale-110 transition-transform" />
-                <h2 className="text-2xl font-bold text-blue-400 mb-2">Docker Network Lab</h2>
+                <FaDocker className="text-4xl sm:text-5xl text-blue-500 mx-auto mb-3 group-hover:scale-110 transition-transform" />
+                <h2 className="text-xl sm:text-2xl font-bold text-blue-400 mb-2">Docker Network Lab</h2>
               </div>
               <div className="space-y-3 text-gray-300 mb-6">
                 <p className="text-sm">🐳 <strong>Real Docker containers</strong></p>
@@ -86,9 +87,9 @@ export default function Home() {
         </div>
 
         {/* Features Section */}
-        <div className="text-center bg-gray-800 rounded-lg p-8 border border-gray-700">
-          <h3 className="text-2xl font-bold text-white mb-4">Why Choose Shark3?</h3>
-          <div className="grid md:grid-cols-3 gap-6 text-gray-300">
+        <div className="text-center bg-gray-800 rounded-lg p-4 sm:p-6 lg:p-8 border border-gray-700">
+          <h3 className="text-xl sm:text-2xl font-bold text-white mb-4">Why Choose Shark3?</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 text-gray-300">
             <div>
               <h4 className="font-semibold text-cyan-400 mb-2">Educational Focus</h4>
               <p className="text-sm">Designed specifically for learning networking concepts with real-world accuracy</p>

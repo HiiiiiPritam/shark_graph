@@ -33,17 +33,81 @@ npm start
 
 ## Network Simulation Features
 
-### Realistic Network Lab
-- **Devices**: Hosts, Switches, Routers with full protocol stacks
-- **Protocols**: Ethernet, IP, ARP, ICMP, static routing
-- **Features**: 
-  - Real packet forwarding and routing
-  - MAC address learning (switches)
-  - ARP resolution
-  - Ping with actual ICMP packets
-  - Packet tracing and analysis
-  - Device configuration (CLI-like interface)
-  - Wireshark-style packet analyzer
+### Realistic Network Lab (🌟 Primary Learning Mode)
+A comprehensive network simulator that implements actual networking protocols and algorithms, providing an authentic learning experience without requiring Docker or complex setup.
+
+#### 🚀 **Quick Start Guide**
+1. **Access**: Navigate to `/realistic` or click "Realistic Network Lab" on homepage
+2. **Build Network**: 
+   - Click "Add Host/Switch/Router" to create devices
+   - Drag between devices to create physical connections
+   - Double-click devices to access CLI configuration
+3. **Configure Devices**:
+   ```bash
+   # Host configuration (in device CLI)
+   ip eth0 192.168.1.10 255.255.255.0  # Set IP address
+   gateway 192.168.1.1                 # Set default gateway
+   
+   # Router configuration  
+   ip Fa0/0 192.168.1.1 255.255.255.0  # Configure interface
+   route add 192.168.2.0/24 192.168.1.2 # Add static route
+   ```
+4. **Test Connectivity**: Use "Start Ping Mode" → Click source → Click destination
+
+#### 🔧 **Device Types & Capabilities**
+- **🖥️ Hosts**: End devices with full TCP/IP stack
+  - Ethernet interfaces (eth0, eth1, etc.)
+  - IP address configuration
+  - ARP table management
+  - ICMP ping functionality
+  - Gateway configuration
+
+- **🔌 Switches**: Layer 2 learning switches (8-24 ports)
+  - MAC address learning and aging
+  - Frame forwarding/flooding
+  - Port-based VLAN support (planned)
+  - Loop prevention mechanisms
+
+- **🛤️ Routers**: Layer 3 routing devices
+  - Multiple FastEthernet interfaces (Fa0/0, Fa0/1, etc.)
+  - Static routing table configuration
+  - Inter-network packet forwarding
+  - ARP proxy functionality
+
+#### 📡 **Implemented Protocols**
+- **Layer 2 (Data Link)**:
+  - Ethernet frame encapsulation/decapsulation
+  - MAC address learning and forwarding
+  - Frame flooding for unknown destinations
+  
+- **Layer 3 (Network)**:
+  - IPv4 packet routing and forwarding
+  - ARP (Address Resolution Protocol)
+  - ICMP (Internet Control Message Protocol)
+  - Static routing with longest prefix match
+  - Subnet mask validation and network calculations
+
+#### 🎯 **Educational Features**
+- **Live Packet Analysis**: Real-time packet tracing with detailed protocol breakdown
+- **CLI Configuration**: Cisco-style command interface for device configuration  
+- **Network Topology Builder**: Drag-and-drop network construction
+- **Step-by-Step Tutorials**: Interactive guides for common scenarios
+- **Troubleshooting Tools**: Network analysis and connectivity diagnostics
+- **Realistic Behavior**: Authentic protocol implementations and timing
+
+#### 💡 **Learning Scenarios**
+1. **Basic LAN Setup**: Connect hosts via switch, configure same subnet
+2. **Inter-VLAN Routing**: Multiple subnets with router gateway
+3. **Multi-Hop Routing**: Complex topologies with static routes
+4. **Network Troubleshooting**: Identify and fix connectivity issues
+5. **Protocol Analysis**: Examine packet flow and protocol operations
+
+#### ⚡ **Advanced Features**
+- **Clean Testing Environment**: No pre-configured connections - build from scratch
+- **Real-time Packet Capture**: Wireshark-style analysis interface
+- **Network State Inspection**: View routing tables, ARP caches, MAC tables
+- **Performance Metrics**: Latency, packet loss, throughput analysis
+- **Export/Import**: Save network configurations for later use
 
 ### Core Classes
 - `NetworkSimulator` - Main simulation engine

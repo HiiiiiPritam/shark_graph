@@ -234,7 +234,7 @@ export class Host implements HostInterface {
 
     // Verify we have a target MAC address
     if (!targetMAC) {
-      throw new Error(`Failed to resolve MAC address for ${nextHopIP}`);
+      throw new Error(`Failed to resolve MAC address for ${nextHop.address}`);
     }
 
     // Create Ethernet frame with resolved MAC
@@ -578,6 +578,7 @@ export class Host implements HostInterface {
     console.log(`🔍 Source IP: ${ipPacket.sourceIP.address}, Dest IP: ${ipPacket.destinationIP.address}`);
     
     if (icmpPacket.type === 8) {
+      // ICMP Echo Request (Ping) - Send Reply
       // Echo Request - send Echo Reply
       console.log(`🔍 Host ${this.name}: Received ICMP Echo Request from ${ipPacket.sourceIP.address}`);
       

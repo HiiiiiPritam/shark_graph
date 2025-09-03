@@ -29,22 +29,16 @@ export interface EthernetFrame {
   timestamp: number;
 }
 
-// OSI Layer 3 - IP Packet
+// OSI Layer 3 - IP Packet (Simplified)
 export interface IPPacket {
   id: string;
   version: number; // 4 for IPv4
-  headerLength: number;
-  typeOfService: number;
   totalLength: number;
-  identification: number;
-  flags: number;
-  fragmentOffset: number;
   timeToLive: number;
-  protocol: number; // 1 for ICMP, 6 for TCP, 17 for UDP
-  headerChecksum: number;
+  protocol: number; // 1 for ICMP
   sourceIP: IPAddress;
   destinationIP: IPAddress;
-  payload: ICMPPacket | TCPSegment | UDPDatagram;
+  payload: ICMPPacket;
   timestamp: number;
 }
 
@@ -71,28 +65,6 @@ export interface ARPPacket {
   targetProtocolAddress: IPAddress;
 }
 
-// TCP Segment
-export interface TCPSegment {
-  sourcePort: number;
-  destinationPort: number;
-  sequenceNumber: number;
-  acknowledgmentNumber: number;
-  headerLength: number;
-  flags: number;
-  windowSize: number;
-  checksum: number;
-  urgentPointer: number;
-  data: string;
-}
-
-// UDP Datagram
-export interface UDPDatagram {
-  sourcePort: number;
-  destinationPort: number;
-  length: number;
-  checksum: number;
-  data: string;
-}
 
 // Routing Table Entry
 export interface RouteEntry {
@@ -119,7 +91,6 @@ export interface ARPEntry {
 export interface MACTableEntry {
   macAddress: MACAddress;
   port: string;
-  vlan: number;
   age: number; // seconds
   type: 'static' | 'dynamic';
 }
@@ -158,14 +129,12 @@ export interface Host extends NetworkDevice {
   arpTable: ARPEntry[];
   routingTable: RouteEntry[];
   defaultGateway?: IPAddress;
-  applications: HostApplication[];
 }
 
 // Switch Device
 export interface Switch extends NetworkDevice {
   type: 'switch';
   macAddressTable: MACTableEntry[];
-  vlans: VLAN[];
   spanningTreeEnabled: boolean;
 }
 
@@ -174,38 +143,8 @@ export interface Router extends NetworkDevice {
   type: 'router';
   routingTable: RouteEntry[];
   arpTable: ARPEntry[];
-  routingProtocols: ('static' | 'rip' | 'ospf')[];
-  accessLists: AccessList[];
 }
 
-// Additional Supporting Types
-export interface VLAN {
-  id: number;
-  name: string;
-  ports: string[];
-}
-
-export interface AccessList {
-  id: string;
-  name: string;
-  type: 'standard' | 'extended';
-  rules: AccessRule[];
-}
-
-export interface AccessRule {
-  action: 'permit' | 'deny';
-  sourceIP?: string;
-  destinationIP?: string;
-  protocol?: string;
-  port?: number;
-}
-
-export interface HostApplication {
-  name: string;
-  protocol: 'tcp' | 'udp';
-  port: number;
-  isRunning: boolean;
-}
 
 // Network Link
 export interface NetworkLink {
@@ -225,27 +164,6 @@ export interface NetworkTopology {
   devices: NetworkDevice[];
   links: NetworkLink[];
   lastModified: number;
-}
-
-// Protocol Configuration
-export interface RIPConfig {
-  enabled: boolean;
-  version: 1 | 2;
-  networks: string[];
-  updateInterval: number; // seconds
-}
-
-export interface OSPFConfig {
-  enabled: boolean;
-  processId: number;
-  routerId: IPAddress;
-  areas: OSPFArea[];
-}
-
-export interface OSPFArea {
-  id: string;
-  networks: string[];
-  type: 'standard' | 'stub' | 'nssa';
 }
 
 // Simulation Events

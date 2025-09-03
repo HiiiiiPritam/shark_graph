@@ -11,9 +11,6 @@ import {
   ARPEntry,
   RouteEntry,
   PacketTrace,
-  AccessList,
-  RIPConfig,
-  OSPFConfig,
 } from '../types';
 import { PacketTracer } from '../protocols/PacketTracer';
 import { NetworkStack } from '../protocols/NetworkStack';
@@ -28,19 +25,13 @@ export class Router implements RouterInterface {
   status: 'up' | 'down';
   routingTable: RouteEntry[];
   arpTable: ARPEntry[];
-  routingProtocols: ('static' | 'rip' | 'ospf')[];
-  accessLists: AccessList[];
   
   private packetTracer: PacketTracer;
-  private ripConfig: RIPConfig;
-  private ospfConfig: OSPFConfig;
-  private ripTimer: NodeJS.Timeout | null = null;
   private arpTimer: NodeJS.Timeout | null = null;
   private transmitCallback?: (frame: EthernetFrame, fromDevice: string, outgoingInterface: string) => Promise<void>;
   private simulator?: any;
   
   private readonly ARP_TIMEOUT = 240; // 4 minutes
-  private readonly RIP_UPDATE_INTERVAL = 30; // 30 seconds
 
   constructor(
     id: string,
@@ -55,24 +46,9 @@ export class Router implements RouterInterface {
     this.status = 'up';
     this.routingTable = [];
     this.arpTable = [];
-    this.routingProtocols = ['static'];
-    this.accessLists = [];
     
     this.packetTracer = new PacketTracer();
     
-    this.ripConfig = {
-      enabled: false,
-      version: 2,
-      networks: [],
-      updateInterval: this.RIP_UPDATE_INTERVAL,
-    };
-    
-    this.ospfConfig = {
-      enabled: false,
-      processId: 1,
-      routerId: { address: '0.0.0.0', subnet: '' },
-      areas: [],
-    };
 
     // Add default interfaces for routers
     this.addInterface('Fa0/0', NetworkStack.generateRandomMAC());
@@ -556,19 +532,13 @@ export class Router implements RouterInterface {
       const replyPacket: IPPacket = {
         id: this.generatePacketId(),
         version: 4,
-        headerLength: 20,
-        typeOfService: 0,
         totalLength: 64,
-        identification: Math.floor(Math.random() * 65536),
-        flags: 0,
-        fragmentOffset: 0,
         timeToLive: 64,
         protocol: 1,
-        headerChecksum: 0,
         sourceIP: sourceInterface.ipAddress,
         destinationIP: ipPacket.sourceIP,
         payload: echoReply,
-        timestamp: performance.now(), // Use high-precision timestamp
+        timestamp: performance.now(),
       };
 
       const pingReplyTrace: PacketTrace = {
@@ -605,19 +575,13 @@ export class Router implements RouterInterface {
     const replyPacket: IPPacket = {
       id: this.generatePacketId(),
       version: 4,
-      headerLength: 20,
-      typeOfService: 0,
       totalLength: 64,
-      identification: Math.floor(Math.random() * 65536),
-      flags: 0,
-      fragmentOffset: 0,
       timeToLive: 64,
       protocol: 1,
-      headerChecksum: 0,
       sourceIP: sourceInterface.ipAddress,
       destinationIP: originalPacket.sourceIP,
       payload: icmpPacket,
-      timestamp: performance.now(), // Use high-precision timestamp
+      timestamp: performance.now()
     };
 
     await this.forwardIPPacket(replyPacket, incomingInterface);
@@ -639,19 +603,13 @@ export class Router implements RouterInterface {
     const replyPacket: IPPacket = {
       id: this.generatePacketId(),
       version: 4,
-      headerLength: 20,
-      typeOfService: 0,
       totalLength: 64,
-      identification: Math.floor(Math.random() * 65536),
-      flags: 0,
-      fragmentOffset: 0,
       timeToLive: 64,
       protocol: 1,
-      headerChecksum: 0,
       sourceIP: sourceInterface.ipAddress,
       destinationIP: originalPacket.sourceIP,
       payload: icmpPacket,
-      timestamp: performance.now(), // Use high-precision timestamp
+      timestamp: performance.now()
     };
 
     const ttlTrace: PacketTrace = {
@@ -669,52 +627,6 @@ export class Router implements RouterInterface {
     await this.forwardIPPacket(replyPacket, incomingInterface);
   }
 
-  // RIP Protocol (Simplified Implementation)
-  enableRIP(version: 1 | 2 = 2, networks: string[] = []): void {
-    this.ripConfig.enabled = true;
-    this.ripConfig.version = version;
-    this.ripConfig.networks = networks;
-    
-    if (!this.routingProtocols.includes('rip')) {
-      this.routingProtocols.push('rip');
-    }
-
-    // Start RIP updates
-    this.startRIPUpdates();
-  }
-
-  disableRIP(): void {
-    this.ripConfig.enabled = false;
-    this.routingProtocols = this.routingProtocols.filter(p => p !== 'rip');
-    
-    if (this.ripTimer) {
-      clearInterval(this.ripTimer);
-      this.ripTimer = null;
-    }
-
-    // Remove RIP routes
-    this.routingTable = this.routingTable.filter(route => route.protocol !== 'rip');
-  }
-
-  private startRIPUpdates(): void {
-    this.ripTimer = setInterval(() => {
-      this.sendRIPUpdates();
-    }, this.ripConfig.updateInterval * 1000);
-  }
-
-  private async sendRIPUpdates(): Promise<void> {
-    // Send RIP updates on all configured interfaces
-    for (const iface of this.interfaces) {
-      if (iface.isUp && iface.ipAddress) {
-        await this.sendRIPUpdate(iface.name);
-      }
-    }
-  }
-
-  private async sendRIPUpdate(interfaceName: string): Promise<void> {
-    // Simplified RIP update - would contain routing table in real implementation
-    console.log(`Router ${this.name}: Sending RIP update on ${interfaceName}`);
-  }
 
   // Helper Methods
   private findInARPTable(ip: IPAddress): MACAddress | null {
@@ -800,11 +712,6 @@ export class Router implements RouterInterface {
     this.status = 'down';
     this.interfaces.forEach(i => i.isUp = false);
     
-    if (this.ripTimer) {
-      clearInterval(this.ripTimer);
-      this.ripTimer = null;
-    }
-    
     if (this.arpTimer) {
       clearInterval(this.arpTimer);
       this.arpTimer = null;
@@ -816,9 +723,6 @@ export class Router implements RouterInterface {
     this.interfaces.forEach(i => i.isUp = true);
     this.startARPAging();
     
-    if (this.ripConfig.enabled) {
-      this.startRIPUpdates();
-    }
   }
 
   // Information Display
@@ -841,8 +745,7 @@ export class Router implements RouterInterface {
 
   getStatus(): string {
     const activeInterfaces = this.interfaces.filter(i => i.isUp).length;
-    const protocols = this.routingProtocols.join(', ');
-    return `Router ${this.name} (${this.status}) - Interfaces: ${activeInterfaces}/${this.interfaces.length} up - Routes: ${this.routingTable.length} - Protocols: ${protocols}`;
+    return `Router ${this.name} (${this.status}) - Interfaces: ${activeInterfaces}/${this.interfaces.length} up - Routes: ${this.routingTable.length}`;
   }
 
   // Get all packet traces from this device

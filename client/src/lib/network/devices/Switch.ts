@@ -4,7 +4,6 @@ import {
   MACAddress,
   EthernetFrame,
   MACTableEntry,
-  VLAN,
   PacketTrace,
 } from '../types';
 import { PacketTracer } from '../protocols/PacketTracer';
@@ -19,7 +18,6 @@ export class Switch implements SwitchInterface {
   isConfigured: boolean;
   status: 'up' | 'down';
   macAddressTable: MACTableEntry[];
-  vlans: VLAN[];
   spanningTreeEnabled: boolean;
   
   private packetTracer: PacketTracer;
@@ -40,7 +38,6 @@ export class Switch implements SwitchInterface {
     this.isConfigured = true; // Switches are typically plug-and-play
     this.status = 'up';
     this.macAddressTable = [];
-    this.vlans = [{ id: 1, name: 'default', ports: [] }]; // Default VLAN
     this.spanningTreeEnabled = true;
     
     this.packetTracer = new PacketTracer();
@@ -72,8 +69,6 @@ export class Switch implements SwitchInterface {
     
     this.interfaces.push(newInterface);
     
-    // Add to default VLAN
-    this.vlans[0].ports.push(name);
   }
 
   // Packet Processing - Core Switch Functionality
@@ -183,7 +178,6 @@ export class Switch implements SwitchInterface {
       const newEntry: MACTableEntry = {
         macAddress: sourceMac,
         port,
-        vlan: 1, // Default VLAN
         age: 0,
         type: 'dynamic',
       };
@@ -329,45 +323,6 @@ export class Switch implements SwitchInterface {
     }
   }
 
-  // VLAN Management
-  createVLAN(vlanId: number, name: string): void {
-    if (this.vlans.find(v => v.id === vlanId)) {
-      throw new Error(`VLAN ${vlanId} already exists`);
-    }
-    
-    this.vlans.push({
-      id: vlanId,
-      name,
-      ports: [],
-    });
-  }
-
-  assignPortToVLAN(portName: string, vlanId: number): void {
-    const vlan = this.vlans.find(v => v.id === vlanId);
-    if (!vlan) {
-      throw new Error(`VLAN ${vlanId} does not exist`);
-    }
-
-    const port = this.interfaces.find(i => i.name === portName);
-    if (!port) {
-      throw new Error(`Port ${portName} does not exist`);
-    }
-
-    // Remove port from all VLANs first
-    this.vlans.forEach(v => {
-      v.ports = v.ports.filter(p => p !== portName);
-    });
-
-    // Add to target VLAN
-    vlan.ports.push(portName);
-
-    // Update MAC table entries for this port
-    this.macAddressTable.forEach(entry => {
-      if (entry.port === portName) {
-        entry.vlan = vlanId;
-      }
-    });
-  }
 
   // Spanning Tree Protocol (Simplified)
   enableSpanningTree(): void {
@@ -412,7 +367,7 @@ export class Switch implements SwitchInterface {
     this.learnMACAddress(macAddress, port);
   }
 
-  addStaticMACEntry(mac: MACAddress, port: string, vlan: number = 1): void {
+  addStaticMACEntry(mac: MACAddress, port: string): void {
     // Remove any existing entry for this MAC
     this.macAddressTable = this.macAddressTable.filter(
       entry => entry.macAddress.address !== mac.address
@@ -421,7 +376,6 @@ export class Switch implements SwitchInterface {
     const staticEntry: MACTableEntry = {
       macAddress: mac,
       port,
-      vlan,
       age: 0,
       type: 'static',
     };
@@ -509,20 +463,12 @@ export class Switch implements SwitchInterface {
     return [...this.macAddressTable];
   }
 
-  showVLANs(): VLAN[] {
-    return [...this.vlans];
-  }
-
-  showPortStatus(): { port: string; status: string; vlan: number; speed: number }[] {
-    return this.interfaces.map(iface => {
-      const vlan = this.vlans.find(v => v.ports.includes(iface.name));
-      return {
-        port: iface.name,
-        status: iface.isUp ? 'up' : 'down',
-        vlan: vlan?.id || 1,
-        speed: iface.speed,
-      };
-    });
+  showPortStatus(): { port: string; status: string; speed: number }[] {
+    return this.interfaces.map(iface => ({
+      port: iface.name,
+      status: iface.isUp ? 'up' : 'down',
+      speed: iface.speed,
+    }));
   }
 
   getStatus(): string {

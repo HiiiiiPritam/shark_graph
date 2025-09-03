@@ -39,68 +39,8 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
     });
     console.log(`🔍 PacketAnalyzer: Found ${arpTraces.length} ARP-related traces`);
     
-    applyFilter();
   }, [traces, filter]);
 
-  const applyFilter = () => {
-    if (!filter.trim()) {
-      setFilteredTraces(traces);
-      return;
-    }
-
-    const filterLower = filter.toLowerCase();
-    const filtered = traces.filter(trace => {
-      const packet = trace.packet;
-      
-      // Filter by device name or type
-      if (trace.deviceName.toLowerCase().includes(filterLower) ||
-          trace.deviceType.toLowerCase().includes(filterLower)) {
-        return true;
-      }
-
-      // Filter by action
-      if (trace.action.toLowerCase().includes(filterLower)) {
-        return true;
-      }
-
-      // Filter by MAC addresses
-      if (packet.sourceMac.address.toLowerCase().includes(filterLower) ||
-          packet.destinationMac.address.toLowerCase().includes(filterLower)) {
-        return true;
-      }
-
-      // Filter by protocol
-      const etherType = NetworkStack.parseEtherType(packet.etherType);
-      if (etherType.toLowerCase().includes(filterLower)) {
-        return true;
-      }
-
-      // Filter by IP addresses (if IPv4)
-      if (packet.etherType === 0x0800) {
-        const ipPacket = packet.payload as IPPacket;
-        if (ipPacket.sourceIP.address.includes(filterLower) ||
-            ipPacket.destinationIP.address.includes(filterLower)) {
-          return true;
-        }
-
-        // Filter by IP protocol
-        const protocol = NetworkStack.parseIPProtocol(ipPacket.protocol);
-        if (protocol.toLowerCase().includes(filterLower)) {
-          return true;
-        }
-      }
-
-      // Filter by interfaces
-      if (trace.incomingInterface?.toLowerCase().includes(filterLower) ||
-          trace.outgoingInterface?.toLowerCase().includes(filterLower)) {
-        return true;
-      }
-
-      return false;
-    });
-
-    setFilteredTraces(filtered);
-  };
 
   const toggleSection = (section: string) => {
     const newExpanded = new Set(expandedSections);
@@ -247,15 +187,9 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
         <div className="bg-gray-50 p-3 border border-green-200">
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div><span className="font-medium text-gray-700">Version:</span> <span className="text-gray-900">{ipPacket.version}</span></div>
-            <div><span className="font-medium text-gray-700">Header Length:</span> <span className="text-gray-900">{ipPacket.headerLength} bytes</span></div>
-            <div><span className="font-medium text-gray-700">Type of Service:</span> <span className="text-gray-900 font-mono">0x{ipPacket.typeOfService.toString(16)}</span></div>
             <div><span className="font-medium text-gray-700">Total Length:</span> <span className="text-gray-900">{ipPacket.totalLength} bytes</span></div>
-            <div><span className="font-medium text-gray-700">Identification:</span> <span className="text-gray-900 font-mono">0x{ipPacket.identification.toString(16)}</span></div>
-            <div><span className="font-medium text-gray-700">Flags:</span> <span className="text-gray-900 font-mono">0x{ipPacket.flags.toString(16)}</span></div>
-            <div><span className="font-medium text-gray-700">Fragment Offset:</span> <span className="text-gray-900">{ipPacket.fragmentOffset}</span></div>
             <div><span className="font-medium text-gray-700">Time to Live:</span> <span className="text-gray-900">{ipPacket.timeToLive}</span></div>
             <div><span className="font-medium text-gray-700">Protocol:</span> <span className="text-gray-900">{ipPacket.protocol} ({NetworkStack.parseIPProtocol(ipPacket.protocol)})</span></div>
-            <div><span className="font-medium text-gray-700">Header Checksum:</span> <span className="text-gray-900 font-mono">0x{ipPacket.headerChecksum.toString(16)}</span></div>
             <div><span className="font-medium text-gray-700">Source IP:</span> <span className="text-gray-900 font-mono">{ipPacket.sourceIP.address}</span></div>
             <div><span className="font-medium text-gray-700">Destination IP:</span> <span className="text-gray-900 font-mono">{ipPacket.destinationIP.address}</span></div>
           </div>
@@ -465,19 +399,6 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
           >
             <FaInfoCircle className="text-sm" />
           </button>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 border-r pr-4">
-            <input
-              type="text"
-              placeholder="Filter packets..."
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-            />
-            <FaFilter className="text-gray-500" />
-          </div>
-          
         </div>
       </div>
 

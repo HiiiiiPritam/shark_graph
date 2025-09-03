@@ -11,7 +11,6 @@ import {
   ARPEntry,
   RouteEntry,
   PacketTrace,
-  HostApplication,
 } from '../types';
 import { PacketTracer } from '../protocols/PacketTracer';
 import { NetworkStack } from '../protocols/NetworkStack';
@@ -27,7 +26,6 @@ export class Host implements HostInterface {
   arpTable: ARPEntry[];
   routingTable: RouteEntry[];
   defaultGateway?: IPAddress;
-  applications: HostApplication[];
   
   private networkStack: NetworkStack;
   private packetTracer: PacketTracer;
@@ -46,7 +44,6 @@ export class Host implements HostInterface {
     this.status = 'up';
     this.arpTable = [];
     this.routingTable = [];
-    this.applications = [];
     
     this.networkStack = new NetworkStack(this);
     this.packetTracer = new PacketTracer();
@@ -217,19 +214,13 @@ export class Host implements HostInterface {
     const ipPacket: IPPacket = {
       id: this.generatePacketId(),
       version: 4,
-      headerLength: 20,
-      typeOfService: 0,
       totalLength: 64,
-      identification: Math.floor(Math.random() * 65536),
-      flags: 0,
-      fragmentOffset: 0,
       timeToLive: 64,
       protocol: 1, // ICMP
-      headerChecksum: 0,
       sourceIP: sourceInterface.ipAddress,
       destinationIP: dest,
       payload: icmpPacket,
-      timestamp: performance.now(), // Use high-precision timestamp
+      timestamp: performance.now(),
     };
 
     // Verify we have a target MAC address
@@ -618,19 +609,13 @@ export class Host implements HostInterface {
       const replyPacket: IPPacket = {
         id: this.generatePacketId(),
         version: 4,
-        headerLength: 20,
-        typeOfService: 0,
         totalLength: 64,
-        identification: Math.floor(Math.random() * 65536),
-        flags: 0,
-        fragmentOffset: 0,
         timeToLive: 64,
         protocol: 1, // ICMP
-        headerChecksum: 0,
         sourceIP: sourceInterface.ipAddress,
         destinationIP: ipPacket.sourceIP,
         payload: echoReply,
-        timestamp: performance.now(), // Use high-precision timestamp
+        timestamp: performance.now(),
       };
 
       // Determine routing for echo reply (same logic as sendPing)

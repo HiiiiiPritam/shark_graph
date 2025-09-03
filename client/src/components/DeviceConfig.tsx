@@ -358,11 +358,11 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
     const macTable = switchDevice.showMACTable();
     
     const output = ['MAC Address Table:'];
-    output.push('MAC Address       VLAN   Interface   Type     Age');
-    output.push('------------------------------------------------');
+    output.push('MAC Address       Interface   Type     Age');
+    output.push('------------------------------------------');
     
     macTable.forEach(entry => {
-      output.push(`${entry.macAddress.address.padEnd(18)} ${entry.vlan.toString().padEnd(6)} ${entry.port.padEnd(11)} ${entry.type.padEnd(8)} ${entry.age}s`);
+      output.push(`${entry.macAddress.address.padEnd(18)} ${entry.port.padEnd(11)} ${entry.type.padEnd(8)} ${entry.age}s`);
     });
     
     return output;
@@ -616,7 +616,6 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
             <thead className="bg-gray-100">
               <tr>
                 <th className="px-4 py-2 text-left text-gray-800">MAC Address</th>
-                <th className="px-4 py-2 text-left text-gray-800">VLAN</th>
                 <th className="px-4 py-2 text-left text-gray-800">Port</th>
                 <th className="px-4 py-2 text-left text-gray-800">Type</th>
                 <th className="px-4 py-2 text-left text-gray-800">Age</th>
@@ -626,7 +625,6 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
               {macTable.map((entry, idx) => (
                 <tr key={idx} className="border-t">
                   <td className="px-4 py-2 font-mono text-gray-700">{entry.macAddress.address}</td>
-                  <td className="px-4 py-2 text-gray-700">{entry.vlan}</td>
                   <td className="px-4 py-2 text-gray-700">{entry.port}</td>
                   <td className="px-4 py-2 text-gray-700">
                     <span className={`px-2 py-1 rounded text-xs ${

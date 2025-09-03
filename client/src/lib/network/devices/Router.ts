@@ -438,7 +438,7 @@ export class Router implements RouterInterface {
     this.addARPEntry(targetIP, targetMac, outgoingInterface);
     
     return targetMac;
-  }
+  }I tthink
 
   async processARPPacket(arpPacket: ARPPacket, incomingInterface: string): Promise<void> {
     if (arpPacket.operation === 1) {

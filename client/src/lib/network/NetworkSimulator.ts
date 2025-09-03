@@ -19,9 +19,20 @@ export class NetworkSimulator {
   private events: SimulationEvent[] = [];
   private isRunning: boolean = false;
   private eventCounter: number = 0;
+  private globalStepCounter: number = 0;
 
   constructor() {
     console.log('Network Simulator initialized');
+  }
+
+  // Global step counter for proper trace ordering
+  getNextGlobalStepNumber(): number {
+    return ++this.globalStepCounter;
+  }
+
+  // Get synchronized timestamp for trace ordering
+  getSyncedTimestamp(): number {
+    return performance.now();
   }
 
   // Device Management
@@ -354,24 +365,32 @@ export class NetworkSimulator {
     
     console.log(`📋 TRACE COLLECTION: Total collected ${allTraces.length} traces from all devices`);
     
-    // Enhanced sorting: Primary by timestamp, secondary by original step number, tertiary by device type priority
+    // Enhanced sorting: Primary by timestamp with better handling for async operations
     const sortedTraces = allTraces.sort((a, b) => {
       // Primary: Sort by timestamp (most important)
-      if (Math.abs(a.timestamp - b.timestamp) > 1) { // If timestamps differ by more than 1ms
-        return a.timestamp - b.timestamp;
+      const timestampDiff = a.timestamp - b.timestamp;
+      if (Math.abs(timestampDiff) > 0.1) { // If timestamps differ by more than 0.1ms
+        return timestampDiff;
       }
       
-      // Secondary: If timestamps are very close, use original step numbers from devices
-      if (a.stepNumber && b.stepNumber && a.stepNumber !== b.stepNumber) {
-        return a.stepNumber - b.stepNumber;
-      }
-      
-      // Tertiary: Device type priority for traces that happen "simultaneously"
+      // Secondary: For nearly simultaneous events, use device type priority
+      // This ensures logical flow: host → switch → router
       const deviceTypePriority = { 'host': 1, 'switch': 2, 'router': 3 };
       const aPriority = deviceTypePriority[a.deviceType as keyof typeof deviceTypePriority] || 4;
       const bPriority = deviceTypePriority[b.deviceType as keyof typeof deviceTypePriority] || 4;
       
-      return aPriority - bPriority;
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+      
+      // Tertiary: Use action type priority for same device type
+      const actionPriority = { 
+        'generated': 1, 'forwarded': 2, 'processed': 3, 'dropped': 4 
+      };
+      const aActionPriority = actionPriority[a.action as keyof typeof actionPriority] || 5;
+      const bActionPriority = actionPriority[b.action as keyof typeof actionPriority] || 5;
+      
+      return aActionPriority - bActionPriority;
     });
     
     // Renumber traces sequentially for proper step numbering

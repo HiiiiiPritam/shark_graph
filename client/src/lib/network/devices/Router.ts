@@ -175,7 +175,6 @@ export class Router implements RouterInterface {
   // IP Packet Processing
   async processIPPacket(ipPacket: IPPacket, incomingInterface: string): Promise<void> {
     // Decrement TTL for routing loop prevention
-    const originalTTL = ipPacket.timeToLive;
     ipPacket.timeToLive--;
     
     if (ipPacket.timeToLive <= 0) {
@@ -376,6 +375,11 @@ export class Router implements RouterInterface {
       throw new Error(`Interface ${outgoingInterface} not configured`);
     }
 
+    // Check if interface is connected
+    if (!sourceInterface.connectedTo) {
+      throw new Error(`Interface ${outgoingInterface} is not connected to any device`);
+    }
+
     // Clear any existing ARP entry for this IP to avoid duplicates
     this.arpTable = this.arpTable.filter(e => e.ipAddress.address !== targetIP.address);
 
@@ -394,10 +398,10 @@ export class Router implements RouterInterface {
     const frame: EthernetFrame = {
       id: this.generateFrameId(),
       sourceMac: sourceInterface.macAddress,
-      destinationMac: { address: 'ff:ff:ff:ff:ff:ff' },
-      etherType: 0x0806,
+      destinationMac: { address: 'ff:ff:ff:ff:ff:ff' }, // Broadcast
+      etherType: 0x0806, // ARP
       payload: arpRequest,
-      timestamp: performance.now(), // Use high-precision timestamp
+      timestamp: performance.now(),
     };
 
     const arpTrace: PacketTrace = {
@@ -408,39 +412,64 @@ export class Router implements RouterInterface {
       action: 'generated',
       outgoingInterface,
       packet: frame,
-      timestamp: performance.now(), // Use high-precision timestamp
+      timestamp: performance.now(),
       decision: `ARP Request: Who has ${targetIP.address}? Tell ${sourceInterface.ipAddress.address}`,
     };
     this.packetTracer.addTrace(arpTrace);
 
-    // Clear any existing ARP entry for this IP to avoid duplicates
-    this.arpTable = this.arpTable.filter(e => e.ipAddress.address !== targetIP.address);
+    // Send the ARP request through the network
+    await this.transmitFrame(frame, outgoingInterface);
 
-    // Try to find the actual device and get its real MAC address
+    // Wait for ARP reply - check ARP table periodically until we get a response
+    const maxWaitTime = 5000; // 5 seconds maximum wait
+    const checkInterval = 50; // Check every 50ms
+    let waitedTime = 0;
     let targetMac: MACAddress | null = null;
+
+    console.log(`🔍 Router ${this.name}: Waiting for ARP reply for ${targetIP.address}...`);
     
-    if (this.simulator) {
-      const targetDevice = this.findDeviceByIP(targetIP.address);
-      if (targetDevice) {
-        const targetInterface = targetDevice.interfaces.find(i => i.ipAddress?.address === targetIP.address);
-        if (targetInterface) {
-          targetMac = targetInterface.macAddress;
-        }
+    while (waitedTime < maxWaitTime && !targetMac) {
+      // Check if we received an ARP reply (processARPPacket would have updated our table)
+      targetMac = this.findInARPTable(targetIP);
+      
+      if (!targetMac) {
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+        waitedTime += checkInterval;
       }
     }
 
-    // Fallback to generating a MAC if we can't find the real device
     if (!targetMac) {
-      targetMac = NetworkStack.generateRandomMAC();
-      console.warn(`${this.name}: Could not find real MAC for ${targetIP.address}, using generated MAC`);
-    }
+      // If we still don't have the MAC after waiting, try the simulator fallback
+      console.warn(`⚠️ Router ${this.name}: ARP timeout for ${targetIP.address}, trying simulator fallback`);
+      
+      if (this.simulator) {
+        const targetDevice = this.findDeviceByIP(targetIP.address);
+        if (targetDevice) {
+          const targetInterface = targetDevice.interfaces.find(i => i.ipAddress?.address === targetIP.address);
+          if (targetInterface) {
+            targetMac = targetInterface.macAddress;
+            console.log(`🔧 Router ${this.name}: Found MAC via simulator fallback: ${targetMac.address}`);
+          }
+        }
+      }
 
-    this.addARPEntry(targetIP, targetMac, outgoingInterface);
+      // Final fallback - generate random MAC (should rarely happen)
+      if (!targetMac) {
+        targetMac = NetworkStack.generateRandomMAC();
+        console.error(`❌ Router ${this.name}: Could not resolve MAC for ${targetIP.address}, using generated MAC: ${targetMac.address}`);
+      }
+
+      // Add to ARP table since we got it via fallback
+      this.addARPEntry(targetIP, targetMac, outgoingInterface);
+    }
     
+    console.log(`✅ Router ${this.name}: ARP resolution complete for ${targetIP.address} -> ${targetMac.address}`);
     return targetMac;
-  }I tthink
+  }
 
   async processARPPacket(arpPacket: ARPPacket, incomingInterface: string): Promise<void> {
+    console.log(`Router ${this.name} processing ARP ${arpPacket.operation === 1 ? 'request' : 'reply'} for ${arpPacket.targetProtocolAddress.address}`);
+    
     if (arpPacket.operation === 1) {
       // ARP Request - check if it's for us
       const ourInterface = this.interfaces.find(i => 
@@ -449,6 +478,8 @@ export class Router implements RouterInterface {
       );
 
       if (ourInterface) {
+        console.log(`Router ${this.name} sending ARP reply to ${arpPacket.senderProtocolAddress.address}`);
+        
         // Send ARP Reply
         const arpReply: ARPPacket = {
           hardwareType: 1,
@@ -468,13 +499,36 @@ export class Router implements RouterInterface {
           destinationMac: arpPacket.senderHardwareAddress,
           etherType: 0x0806,
           payload: arpReply,
-          timestamp: performance.now(), // Use high-precision timestamp
+          timestamp: performance.now(),
         };
 
+        // Add our entry to ARP table first
+        this.addARPEntry(
+          arpPacket.senderProtocolAddress,
+          arpPacket.senderHardwareAddress,
+          incomingInterface
+        );
+
+        const arpReplyTrace: PacketTrace = {
+          stepNumber: this.packetTracer.getNextStepNumber(),
+          deviceId: this.id,
+          deviceName: this.name,
+          deviceType: 'router',
+          action: 'generated',
+          outgoingInterface: incomingInterface,
+          packet: frame,
+          timestamp: performance.now(),
+          decision: `ARP Reply: ${ourInterface.ipAddress!.address} is at ${ourInterface.macAddress.address}`,
+        };
+        this.packetTracer.addTrace(arpReplyTrace);
+
         await this.transmitFrame(frame, incomingInterface);
+      } else {
+        console.log(`Router ${this.name} ignoring ARP request for ${arpPacket.targetProtocolAddress.address} (not for us)`);
       }
     } else if (arpPacket.operation === 2) {
       // ARP Reply - update our ARP table
+      console.log(`Router ${this.name} received ARP reply: ${arpPacket.senderProtocolAddress.address} -> ${arpPacket.senderHardwareAddress.address}`);
       this.addARPEntry(
         arpPacket.senderProtocolAddress,
         arpPacket.senderHardwareAddress,

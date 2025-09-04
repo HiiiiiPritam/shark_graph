@@ -360,10 +360,7 @@ export class Router implements RouterInterface {
     this.arpTable = this.arpTable.filter(e => e.ipAddress.address !== targetIP.address);
 
     const arpRequest: ARPPacket = {
-      hardwareType: 1,
       protocolType: 0x0800,
-      hardwareSize: 6,
-      protocolSize: 4,
       operation: 1, // Request
       senderHardwareAddress: sourceInterface.macAddress,
       senderProtocolAddress: sourceInterface.ipAddress,
@@ -458,10 +455,7 @@ export class Router implements RouterInterface {
         
         // Send ARP Reply
         const arpReply: ARPPacket = {
-          hardwareType: 1,
           protocolType: 0x0800,
-          hardwareSize: 6,
-          protocolSize: 4,
           operation: 2, // Reply
           senderHardwareAddress: ourInterface.macAddress,
           senderProtocolAddress: ourInterface.ipAddress!,
@@ -520,7 +514,6 @@ export class Router implements RouterInterface {
       const echoReply: ICMPPacket = {
         type: 0, // Echo Reply
         code: 0,
-        checksum: 0,
         identifier: icmpPacket.identifier,
         sequenceNumber: icmpPacket.sequenceNumber,
         data: icmpPacket.data,
@@ -531,8 +524,6 @@ export class Router implements RouterInterface {
 
       const replyPacket: IPPacket = {
         id: this.generatePacketId(),
-        version: 4,
-        totalLength: 64,
         timeToLive: 64,
         protocol: 1,
         sourceIP: sourceInterface.ipAddress,
@@ -566,7 +557,6 @@ export class Router implements RouterInterface {
     const icmpPacket: ICMPPacket = {
       type: 3, // Destination Unreachable
       code: 0, // Network Unreachable
-      checksum: 0,
       identifier: 0,
       sequenceNumber: 0,
       data: 'Network Unreachable',
@@ -574,8 +564,6 @@ export class Router implements RouterInterface {
 
     const replyPacket: IPPacket = {
       id: this.generatePacketId(),
-      version: 4,
-      totalLength: 64,
       timeToLive: 64,
       protocol: 1,
       sourceIP: sourceInterface.ipAddress,
@@ -594,7 +582,6 @@ export class Router implements RouterInterface {
     const icmpPacket: ICMPPacket = {
       type: 11, // Time Exceeded
       code: 0, // TTL Exceeded
-      checksum: 0,
       identifier: 0,
       sequenceNumber: 0,
       data: 'TTL Exceeded',
@@ -602,8 +589,6 @@ export class Router implements RouterInterface {
 
     const replyPacket: IPPacket = {
       id: this.generatePacketId(),
-      version: 4,
-      totalLength: 64,
       timeToLive: 64,
       protocol: 1,
       sourceIP: sourceInterface.ipAddress,

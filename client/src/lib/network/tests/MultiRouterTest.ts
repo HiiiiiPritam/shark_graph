@@ -301,9 +301,7 @@ export class MultiRouterTest {
       console.log('⚠️ Some tests failed. Check the implementation for multi-router scenarios.');
     }
 
-    // Analyze final topology
-    const analysis = this.simulator.analyzeComplexTopology();
-    console.log('\n📈 Final Topology Analysis:', analysis);
+    console.log('\n✅ Multi-router test completed');
   }
 }
 

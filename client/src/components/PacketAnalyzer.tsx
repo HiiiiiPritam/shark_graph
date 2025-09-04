@@ -19,28 +19,6 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['ethernet']));
   const [showHelp, setShowHelp] = useState(false);
 
-  useEffect(() => {
-    console.log(`🔍 PacketAnalyzer: Received ${traces.length} traces:`, traces);
-    
-    // Debug ARP traces specifically
-    const arpTraces = traces.filter(t => {
-      const hasARP = t.packet?.etherType === 0x0806 || 
-                    (t.packet?.payload && 'operation' in (t.packet.payload as any)) ||
-                    t.decision?.includes('ARP');
-      if (hasARP) {
-        console.log('🔍 PacketAnalyzer: Found ARP trace:', {
-          decision: t.decision,
-          etherType: t.packet?.etherType,
-          etherTypeHex: t.packet?.etherType?.toString(16),
-          payload: t.packet?.payload
-        });
-      }
-      return hasARP;
-    });
-    console.log(`🔍 PacketAnalyzer: Found ${arpTraces.length} ARP-related traces`);
-    
-  }, [traces, filter]);
-
 
   const toggleSection = (section: string) => {
     const newExpanded = new Set(expandedSections);
@@ -62,8 +40,8 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
     let length = 14; // Ethernet header
     
     if (packet?.etherType === 0x0800 && packet.payload) {
-      const ipPacket = packet.payload as IPPacket;
-      length += ipPacket?.totalLength || 0;
+      // IP packet - estimate size (real world would use totalLength field)
+      length += 64; // Default IP + ICMP size
     } else if (packet?.etherType === 0x0806) {
       length += 28; // ARP packet size
     }
@@ -180,14 +158,12 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
         className="bg-green-100 p-2 cursor-pointer flex items-center justify-between hover:bg-green-200 transition-colors"
         onClick={() => toggleSection('ip')}
       >
-        <h3 className="font-semibold text-gray-900">IP Header (IPv{ipPacket.version})</h3>
+        <h3 className="font-semibold text-gray-900">IP Header (IPv4)</h3>
         <FaExpand className={`transform transition-transform ${expandedSections.has('ip') ? 'rotate-180' : ''} text-gray-700`} />
       </div>
       {expandedSections.has('ip') && (
         <div className="bg-gray-50 p-3 border border-green-200">
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><span className="font-medium text-gray-700">Version:</span> <span className="text-gray-900">{ipPacket.version}</span></div>
-            <div><span className="font-medium text-gray-700">Total Length:</span> <span className="text-gray-900">{ipPacket.totalLength} bytes</span></div>
             <div><span className="font-medium text-gray-700">Time to Live:</span> <span className="text-gray-900">{ipPacket.timeToLive}</span></div>
             <div><span className="font-medium text-gray-700">Protocol:</span> <span className="text-gray-900">{ipPacket.protocol} ({NetworkStack.parseIPProtocol(ipPacket.protocol)})</span></div>
             <div><span className="font-medium text-gray-700">Source IP:</span> <span className="text-gray-900 font-mono">{ipPacket.sourceIP.address}</span></div>
@@ -212,7 +188,6 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div><span className="font-medium text-gray-700">Type:</span> <span className="text-gray-900">{icmpPacket.type} ({NetworkStack.parseICMPType(icmpPacket.type)})</span></div>
             <div><span className="font-medium text-gray-700">Code:</span> <span className="text-gray-900">{icmpPacket.code}</span></div>
-            <div><span className="font-medium text-gray-700">Checksum:</span> <span className="text-gray-900 font-mono">0x{icmpPacket.checksum.toString(16)}</span></div>
             <div><span className="font-medium text-gray-700">Identifier:</span> <span className="text-gray-900">{icmpPacket.identifier}</span></div>
             <div><span className="font-medium text-gray-700">Sequence Number:</span> <span className="text-gray-900">{icmpPacket.sequenceNumber}</span></div>
             <div><span className="font-medium text-gray-700">Data:</span> <span className="text-gray-900">{icmpPacket.data}</span></div>
@@ -234,10 +209,7 @@ export default function PacketAnalyzer({ traces, onStartCapture, onStopCapture, 
       {expandedSections.has('arp') && (
         <div className="bg-gray-50 p-3 border border-purple-200">
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><span className="font-medium text-gray-700">Hardware Type:</span> <span className="text-gray-900">{arpPacket.hardwareType} (Ethernet)</span></div>
             <div><span className="font-medium text-gray-700">Protocol Type:</span> <span className="text-gray-900 font-mono">0x{arpPacket.protocolType.toString(16)} (IPv4)</span></div>
-            <div><span className="font-medium text-gray-700">Hardware Size:</span> <span className="text-gray-900">{arpPacket.hardwareSize} bytes</span></div>
-            <div><span className="font-medium text-gray-700">Protocol Size:</span> <span className="text-gray-900">{arpPacket.protocolSize} bytes</span></div>
             <div><span className="font-medium text-gray-700">Operation:</span> <span className="text-gray-900">{arpPacket.operation} ({NetworkStack.parseARPOperation(arpPacket.operation)})</span></div>
             <div><span className="font-medium text-gray-700">Sender MAC:</span> <span className="text-gray-900 font-mono">{arpPacket.senderHardwareAddress.address}</span></div>
             <div><span className="font-medium text-gray-700">Sender IP:</span> <span className="text-gray-900 font-mono">{arpPacket.senderProtocolAddress.address}</span></div>

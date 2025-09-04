@@ -64,22 +64,15 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
             '  show ip route - Display routing table (routers only)',
             '  show arp - Display ARP table',
             '  show mac-address-table - Display MAC table (switches only)',
-            '  show status - Display device status',
             '  ip <interface> <ip-address> <subnet-mask> - Configure IP address',
             '  gateway <ip-address> - Set default gateway (hosts only)',
             '  route add <destination> <mask> <next-hop> <interface> - Add static route (routers only)',
-            '  ping <ip> - Ping an IP address (hosts/routers only)',
-            '  clear arp - Clear ARP table',
-            '  clear mac-address-table - Clear MAC table (switches only)',
-            '  shutdown - Shutdown device',
-            '  no shutdown - Start device',
             '',
             'Examples:',
             '  ip eth0 192.168.1.10 255.255.255.0   (for hosts)',
             '  ip Fa0/0 192.168.1.1 255.255.255.0   (for routers)',
             '  gateway 192.168.1.1',
             '  route add 192.168.2.0 255.255.255.0 192.168.1.2 Fa0/0',
-            '  ping 192.168.2.10',
           ];
 
         case 'show':
@@ -93,25 +86,6 @@ export default function DeviceConfig({ device, onClose, onConfigChange }: Device
 
         case 'route':
           return handleRouteCommand(originalParts.slice(1));
-
-        case 'ping':
-          return handlePingCommand(parts[1]);
-
-        case 'clear':
-          return handleClearCommand(parts[1]);
-
-        case 'shutdown':
-          device.shutdown();
-          onConfigChange();
-          return [`${device.name} shutdown`];
-
-        case 'no':
-          if (parts[1] === 'shutdown') {
-            device.startup();
-            onConfigChange();
-            return [`${device.name} started`];
-          }
-          return ['Invalid command'];
 
         default:
           return [`Unknown command: ${command}. Type 'help' for available commands.`];

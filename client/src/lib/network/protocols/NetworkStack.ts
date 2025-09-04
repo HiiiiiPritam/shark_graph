@@ -79,30 +79,6 @@ export class NetworkStack {
     return { address: mac };
   }
 
-  // Checksum calculations
-  //removed
-  // static calculateIPChecksum(header: number[]): number {
-  //   let sum = 0;
-    
-  //   // Sum all 16-bit words
-  //   for (let i = 0; i < header.length; i += 2) {
-  //     const word = (header[i] << 8) + (header[i + 1] || 0);
-  //     sum += word;
-  //   }
-    
-  //   // Add carry bits
-  //   while (sum >> 16) {
-  //     sum = (sum & 0xFFFF) + (sum >> 16);
-  //   }
-    
-  //   // One's complement
-  //   return (~sum) & 0xFFFF;
-  // }
-
-  //removed
-  // static calculateICMPChecksum(packet: number[]): number {
-  //   return NetworkStack.calculateIPChecksum(packet);
-  // }
 
   // Protocol parsing helpers
   static parseEtherType(etherType: number | undefined): string {
@@ -190,26 +166,4 @@ export class NetworkStack {
   //   return `${(ms / 1000).toFixed(2)} s`;
   // }
 
-  // Network analysis utilities
-  static analyzePacketFlow(traces: any[]): {
-    totalHops: number;
-    totalLatency: number;
-    devicesTraversed: string[];
-    protocolsUsed: string[];
-  } {
-    const devicesTraversed = [...new Set(traces.map(t => t.deviceName))];
-    const protocolsUsed = [...new Set(traces.map(t => {
-      if (t.packet.etherType === 0x0800) return 'IPv4';
-      if (t.packet.etherType === 0x0806) return 'ARP';
-      return 'Unknown';
-    }))];
-
-    return {
-      totalHops: traces.length,
-      totalLatency: traces.length > 1 ? 
-        traces[traces.length - 1].timestamp - traces[0].timestamp : 0,
-      devicesTraversed,
-      protocolsUsed
-    };
-  }
 }

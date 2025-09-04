@@ -28,7 +28,6 @@ import DeviceConfig from './DeviceConfig';
 import PacketAnalyzer from './PacketAnalyzer';
 import { FaDesktop, FaNetworkWired, FaRoute, FaCog, FaPlay, FaBook, FaEye, FaGraduationCap, FaSearch } from 'react-icons/fa';
 // import EducationalTutorials from './EducationalTutorials';
-import NetworkAnalyzer from './NetworkAnalyzer';
 
 let nodeId = 1;
 const getNodeId = () => `device-${nodeId++}`;
@@ -134,8 +133,7 @@ export default function RealisticNetworkFlow() {
   const [isCapturing, setIsCapturing] = useState(false);
   const [pingSource, setPingSource] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
-  // const [showEducationalTutorials, setShowEducationalTutorials] = useState(false);
-  const [showNetworkAnalyzer, setShowNetworkAnalyzer] = useState(false);
+  // const [showEducationalTutorials, 
   const [isPingMode, setIsPingMode] = useState(false);
 
   useEffect(() => {
@@ -144,7 +142,7 @@ export default function RealisticNetworkFlow() {
     simulator.start();
     
     // Create a simple demo network
-    createDemoNetwork();
+    // createDemoNetwork();
     
     return () => {
       simulator.stop();
@@ -375,20 +373,6 @@ export default function RealisticNetworkFlow() {
         const traces = await simulator.ping(sourceId, targetIP);
         console.log(`🎯 UI: simulator.ping() returned ${traces.length} traces:`, traces);
         
-        // Debug ARP traces specifically before passing to PacketAnalyzer
-        const arpTraces = traces.filter(t => 
-          t.packet?.etherType === 0x0806 || 
-          (t.packet?.payload && 'operation' in (t.packet.payload as any)) ||
-          t.decision?.includes('ARP')
-        );
-        console.log(`🔍 UI: Found ${arpTraces.length} ARP traces to pass to PacketAnalyzer:`, arpTraces.map(t => ({
-          device: t.deviceName,
-          etherType: t.packet?.etherType,
-          etherTypeHex: t.packet?.etherType?.toString(16),
-          decision: t.decision,
-          hasPayload: !!t.packet?.payload,
-          payloadKeys: t.packet?.payload ? Object.keys(t.packet.payload) : null
-        })));
         
         setPacketTraces(prev => {
           const newTraces = [...prev, ...traces];
@@ -746,12 +730,6 @@ export default function RealisticNetworkFlow() {
             <FaBook className="text-xs sm:text-sm" /> <span className="hidden md:inline">Quick Guide</span><span className="md:hidden">Guide</span>
           </button>
           <button
-            onClick={() => setShowNetworkAnalyzer(true)}
-            className="px-2 sm:px-3 py-1 sm:py-2 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700 flex items-center gap-1 sm:gap-2"
-          >
-            <FaSearch className="text-xs sm:text-sm" /> <span className="hidden md:inline">Analyze</span><span className="md:hidden">Analyze</span>
-          </button>
-          <button
             onClick={() => setShowPacketAnalyzer(!showPacketAnalyzer)}
             className="px-2 sm:px-3 py-1 sm:py-2 bg-indigo-600 text-white rounded text-xs sm:text-sm hover:bg-indigo-700 flex items-center gap-1 sm:gap-2"
           >
@@ -859,13 +837,6 @@ export default function RealisticNetworkFlow() {
         <EducationalTutorials onClose={() => setShowEducationalTutorials(false)} />
       )} */}
 
-      {/* Network Analyzer */}
-      {showNetworkAnalyzer && (
-        <NetworkAnalyzer 
-          simulator={simulator} 
-          onClose={() => setShowNetworkAnalyzer(false)} 
-        />
-      )}
     </div>
   );
 }

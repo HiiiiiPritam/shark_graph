@@ -19,20 +19,9 @@ export class NetworkSimulator {
   private events: SimulationEvent[] = [];
   private isRunning: boolean = false;
   private eventCounter: number = 0;
-  private globalStepCounter: number = 0;
 
   constructor() {
     console.log('Network Simulator initialized');
-  }
-
-  // Global step counter for proper trace ordering
-  getNextGlobalStepNumber(): number {
-    return ++this.globalStepCounter;
-  }
-
-  // Get synchronized timestamp for trace ordering
-  getSyncedTimestamp(): number {
-    return performance.now();
   }
 
   // Device Management
@@ -136,9 +125,7 @@ export class NetworkSimulator {
     deviceA: string,
     interfaceA: string,
     deviceB: string,
-    interfaceB: string,
-    bandwidth: number = 100,
-    latency: number = 1
+    interfaceB: string
   ): NetworkLink {
     const devA = this.devices.get(deviceA);
     const devB = this.devices.get(deviceB);
@@ -162,10 +149,7 @@ export class NetworkSimulator {
       interfaceA,
       deviceB,
       interfaceB,
-      bandwidth,
-      latency,
       isUp: true,
-      utilization: 0,
     };
 
     // Update interface connections with proper object format
@@ -264,68 +248,6 @@ export class NetworkSimulator {
     });
   }
 
-  // Get network topology analysis for complex scenarios
-  analyzeComplexTopology(): {
-    routerCount: number;
-    hostCount: number;
-    switchCount: number;
-    routingTableSizes: { [routerId: string]: number };
-    networkSegments: string[];
-    potentialRoutingIssues: string[];
-  } {
-    const routers = Array.from(this.devices.values()).filter(d => d.type === 'router') as Router[];
-    const hosts = Array.from(this.devices.values()).filter(d => d.type === 'host') as Host[];
-    const switches = Array.from(this.devices.values()).filter(d => d.type === 'switch');
-    
-    const routingTableSizes: { [routerId: string]: number } = {};
-    const networkSegments: string[] = [];
-    const potentialRoutingIssues: string[] = [];
-
-    routers.forEach(router => {
-      const routingTable = router.showRoutingTable();
-      routingTableSizes[router.id] = routingTable.length;
-      
-      // Analyze each router's interfaces for network segments
-      router.interfaces.forEach(iface => {
-        if (iface.ipAddress) {
-          const network = NetworkStack.calculateNetworkAddress(iface.ipAddress.address, iface.ipAddress.subnet);
-          const segment = `${network}/${NetworkStack.getPrefixLength(iface.ipAddress.subnet)}`;
-          if (!networkSegments.includes(segment)) {
-            networkSegments.push(segment);
-          }
-        }
-      });
-
-      // Check for potential routing issues
-      if (routingTable.length === 0) {
-        potentialRoutingIssues.push(`Router ${router.name} has no routes configured`);
-      }
-      
-      const hasDefaultRoute = routingTable.some(route => 
-        route.destinationNetwork.address === '0.0.0.0' && route.subnetMask === '0.0.0.0'
-      );
-      
-      if (!hasDefaultRoute && routers.length > 1) {
-        potentialRoutingIssues.push(`Router ${router.name} may need a default route for multi-router connectivity`);
-      }
-    });
-
-    // Check for host gateway configurations
-    hosts.forEach(host => {
-      if (!host.defaultGateway && routers.length > 0) {
-        potentialRoutingIssues.push(`Host ${host.name} should have a default gateway configured`);
-      }
-    });
-
-    return {
-      routerCount: routers.length,
-      hostCount: hosts.length,
-      switchCount: switches.length,
-      routingTableSizes,
-      networkSegments,
-      potentialRoutingIssues
-    };
-  }
 
   // Removed centralized trace collection - now using device-level traces only
 
@@ -369,7 +291,7 @@ export class NetworkSimulator {
     const sortedTraces = allTraces.sort((a, b) => {
       // Primary: Sort by timestamp (most important)
       const timestampDiff = a.timestamp - b.timestamp;
-      if (Math.abs(timestampDiff) > 0.1) { // If timestamps differ by more than 0.1ms
+      if (Math.abs(timestampDiff) > 0.00001) { // If timestamps differ by more than 0.1ms
         return timestampDiff;
       }
       
@@ -507,66 +429,6 @@ export class NetworkSimulator {
   }
 
 
-  // Network Analysis
-  analyzeNetworkTopology(): {
-    deviceCount: { hosts: number; switches: number; routers: number };
-    linkCount: number;
-    networkSegments: string[];
-    potentialIssues: string[];
-  } {
-    const devices = Array.from(this.devices.values());
-    
-    const deviceCount = {
-      hosts: devices.filter(d => d.type === 'host').length,
-      switches: devices.filter(d => d.type === 'switch').length,
-      routers: devices.filter(d => d.type === 'router').length,
-    };
-
-    const linkCount = this.links.size;
-    
-    // Analyze network segments
-    const networkSegments: string[] = [];
-    const potentialIssues: string[] = [];
-
-    devices.forEach(device => {
-      if (device.type === 'router') {
-        const router = device as Router;
-        router.interfaces.forEach(iface => {
-          if (iface.ipAddress) {
-            const network = NetworkStack.calculateNetworkAddress(iface.ipAddress.address, iface.ipAddress.subnet);
-            const segment = `${network}/${NetworkStack.getPrefixLength(iface.ipAddress.subnet)}`;
-            if (!networkSegments.includes(segment)) {
-              networkSegments.push(segment);
-            }
-          }
-        });
-      }
-    });
-
-    // Check for potential issues
-    if (deviceCount.hosts > 0 && deviceCount.routers === 0) {
-      potentialIssues.push('No routers found - hosts may not be able to communicate across subnets');
-    }
-
-    if (linkCount === 0) {
-      potentialIssues.push('No links configured - devices are isolated');
-    }
-
-    const unconnectedDevices = devices.filter(device => 
-      !device.interfaces.some(iface => iface.connectedTo)
-    );
-    
-    if (unconnectedDevices.length > 0) {
-      potentialIssues.push(`${unconnectedDevices.length} devices are not connected to the network`);
-    }
-
-    return {
-      deviceCount,
-      linkCount,
-      networkSegments,
-      potentialIssues,
-    };
-  }
 
   traceroute(sourceHostId: string, destinationIP: string): PacketTrace[] {
     // Simplified traceroute implementation
@@ -627,9 +489,7 @@ export class NetworkSimulator {
           link.deviceA,
           link.interfaceA,
           link.deviceB,
-          link.interfaceB,
-          link.bandwidth,
-          link.latency
+          link.interfaceB
         );
       }
       
@@ -762,262 +622,5 @@ export class NetworkSimulator {
       linkCount: this.links.size,
       eventCount: this.events.length,
     };
-  }
-
-  // ============================
-  // COMPREHENSIVE TOPOLOGY SUPPORT
-  // ============================
-
-  /**
-   * Validates the entire network topology for common issues
-   */
-  validateTopology(): { isValid: boolean; issues: string[]; suggestions: string[] } {
-    const issues: string[] = [];
-    const suggestions: string[] = [];
-
-    console.log('🔍 Validating network topology...');
-
-    // Check for isolated devices
-    const isolatedDevices = this.findIsolatedDevices();
-    if (isolatedDevices.length > 0) {
-      issues.push(`Found ${isolatedDevices.length} isolated devices: ${isolatedDevices.map(d => d.name).join(', ')}`);
-      suggestions.push('Connect isolated devices to the network using physical links');
-    }
-
-    // Check for hosts without IP addresses
-    const hostsWithoutIP = this.findHostsWithoutIP();
-    if (hostsWithoutIP.length > 0) {
-      issues.push(`Found ${hostsWithoutIP.length} hosts without IP addresses: ${hostsWithoutIP.map(h => h.name).join(', ')}`);
-      suggestions.push('Configure IP addresses on hosts using: ip eth0 192.168.1.10 255.255.255.0');
-    }
-
-    // Check for missing default gateways
-    const hostsWithoutGateway = this.findHostsWithoutGateway();
-    if (hostsWithoutGateway.length > 0) {
-      issues.push(`Found ${hostsWithoutGateway.length} hosts without default gateway: ${hostsWithoutGateway.map(h => h.name).join(', ')}`);
-      suggestions.push('Configure default gateways on hosts using: gateway 192.168.1.1');
-    }
-
-    // Check for routing loops
-    const routingIssues = this.detectRoutingIssues();
-    issues.push(...routingIssues);
-
-    console.log(`✅ Topology validation complete: ${issues.length} issues found`);
-    
-    return {
-      isValid: issues.length === 0,
-      issues,
-      suggestions
-    };
-  }
-
-  private findIsolatedDevices(): any[] {
-    const isolatedDevices: any[] = [];
-    
-    for (const device of this.devices.values()) {
-      const hasConnections = device.interfaces.some(iface => iface.connectedTo);
-      if (!hasConnections) {
-        isolatedDevices.push(device);
-      }
-    }
-
-    return isolatedDevices;
-  }
-
-  private findHostsWithoutIP(): Host[] {
-    const hostsWithoutIP: Host[] = [];
-    
-    for (const device of this.devices.values()) {
-      if (device.type === 'host') {
-        const host = device as Host;
-        const hasConfiguredIP = host.interfaces.some(iface => iface.ipAddress);
-        if (!hasConfiguredIP) {
-          hostsWithoutIP.push(host);
-        }
-      }
-    }
-
-    return hostsWithoutIP;
-  }
-
-  private findHostsWithoutGateway(): Host[] {
-    const hostsWithoutGateway: Host[] = [];
-    
-    for (const device of this.devices.values()) {
-      if (device.type === 'host') {
-        const host = device as Host;
-        // This would need to be implemented in Host class
-        // For now, we'll assume hosts without proper routing setup
-      }
-    }
-
-    return hostsWithoutGateway;
-  }
-
-  private detectRoutingIssues(): string[] {
-    const issues: string[] = [];
-    
-    // Check each router for basic routing configuration
-    for (const device of this.devices.values()) {
-      if (device.type === 'router') {
-        const router = device as Router;
-        
-        // Check if router interfaces are properly configured
-        const unconfiguredInterfaces = router.interfaces.filter(iface => !iface.ipAddress);
-        if (unconfiguredInterfaces.length > 0) {
-          issues.push(`Router ${router.name} has unconfigured interfaces: ${unconfiguredInterfaces.map(i => i.name).join(', ')}`);
-        }
-
-        // Check for routing table completeness
-        const routingTableSize = router.routingTable.length;
-        const interfaceCount = router.interfaces.filter(i => i.ipAddress).length;
-        
-        if (routingTableSize < interfaceCount) {
-          issues.push(`Router ${router.name} may need additional static routes for full connectivity`);
-        }
-      }
-    }
-
-    return issues;
-  }
-
-  /**
-   * Automatically configure common network topologies
-   */
-  setupTopology(topologyType: 'simple-lan' | 'routed-network' | 'multi-hop', config: any): void {
-    console.log(`🛠️ Setting up ${topologyType} topology...`);
-
-    switch (topologyType) {
-      case 'simple-lan':
-        this.setupSimpleLAN(config);
-        break;
-      case 'routed-network':
-        this.setupRoutedNetwork(config);
-        break;
-      case 'multi-hop':
-        this.setupMultiHopNetwork(config);
-        break;
-      default:
-        throw new Error(`Unknown topology type: ${topologyType}`);
-    }
-
-    console.log(`✅ ${topologyType} topology setup complete`);
-  }
-
-  private setupSimpleLAN(config: { hostCount: number; switchPorts: number; subnet: string }): void {
-    // Create switch
-    const switchId = this.addSwitch('switch1', 'LAN-Switch', config.switchPorts, { x: 300, y: 200 });
-    
-    // Create hosts and connect to switch
-    for (let i = 1; i <= config.hostCount; i++) {
-      const hostId = this.addHost(`host${i}`, `PC-${i}`, { x: 100 + i * 100, y: 300 });
-      
-      // Connect host to switch
-      this.createLink(hostId.id, 'eth0', switchId.id, `Fa0/${i}`);
-      
-      // Configure IP address
-      const ipAddress = config.subnet.replace('0', i.toString());
-      this.configureHostIP(hostId.id, 'eth0', ipAddress, '255.255.255.0');
-    }
-  }
-
-  private setupRoutedNetwork(config: { subnets: string[]; routerCount: number }): void {
-    // Create routers
-    const routers = [];
-    for (let i = 1; i <= config.routerCount; i++) {
-      const routerId = this.addRouter(`router${i}`, `Router-${i}`, { x: 200 + i * 200, y: 200 });
-      routers.push(routerId.id);
-    }
-
-    // Connect routers in sequence and create subnets
-    for (let i = 0; i < routers.length; i++) {
-      const routerId = routers[i];
-      const subnet = config.subnets[i] || '192.168.' + (i + 1) + '.0';
-
-      // Configure router interface for subnet
-      this.configureRouterIP(routerId, 'Fa0/0', subnet.replace('0', '1'), '255.255.255.0');
-      
-      // Create switch and hosts for this subnet
-      const switchId = this.addSwitch(`switch${i + 1}`, `Switch-${i + 1}`, 8, { x: 200 + i * 200, y: 350 });
-      this.createLink(routerId, 'Fa0/0', switchId.id, 'Fa0/1');
-      
-      // Connect routers
-      if (i < routers.length - 1) {
-        const nextRouter = routers[i + 1];
-        const interconnectSubnet = `10.0.${i + 1}.0`;
-        
-        // Configure inter-router link
-        this.configureRouterIP(routerId, 'Fa0/1', interconnectSubnet.replace('0', '1'), '255.255.255.0');
-        this.configureRouterIP(nextRouter, 'Fa0/1', interconnectSubnet.replace('0', '2'), '255.255.255.0');
-        this.createLink(routerId, 'Fa0/1', nextRouter, 'Fa0/1');
-        
-        // Add static routes
-        this.addStaticRoute(routerId, config.subnets[i + 1] || '192.168.' + (i + 2) + '.0', '255.255.255.0', interconnectSubnet.replace('0', '2'), 'Fa0/1');
-        this.addStaticRoute(nextRouter, subnet, '255.255.255.0', interconnectSubnet.replace('0', '1'), 'Fa0/1');
-      }
-    }
-  }
-
-  private setupMultiHopNetwork(config: { hops: number; hostsPerSegment: number }): void {
-    // Create a chain of router-switch-router segments
-    for (let hop = 0; hop < config.hops; hop++) {
-      const routerId = this.addRouter(`router${hop + 1}`, `R${hop + 1}`, { x: hop * 300, y: 200 });
-      const switchId = this.addSwitch(`switch${hop + 1}`, `SW${hop + 1}`, 8, { x: hop * 300, y: 350 });
-      
-      // Connect router to switch
-      this.createLink(routerId.id, 'Fa0/0', switchId.id, 'Fa0/1');
-      this.configureRouterIP(routerId.id, 'Fa0/0', `192.168.${hop + 1}.1`, '255.255.255.0');
-      
-      // Add hosts to this segment
-      for (let h = 1; h <= config.hostsPerSegment; h++) {
-        const hostId = this.addHost(`host${hop + 1}_${h}`, `PC${hop + 1}-${h}`, { x: hop * 300 + h * 50, y: 450 });
-        this.createLink(hostId.id, 'eth0', switchId.id, `Fa0/${h + 1}`);
-        this.configureHostIP(hostId.id, 'eth0', `192.168.${hop + 1}.${h + 10}`, '255.255.255.0');
-      }
-      
-      // Connect to next hop router
-      if (hop < config.hops - 1) {
-        const nextRouterId = `router${hop + 2}`;
-        // This will be connected when the next router is created
-      }
-    }
-  }
-
-  /**
-   * Provides topology analysis and recommendations
-   */
-  analyzeTopology(): { analysis: string[]; recommendations: string[] } {
-    const analysis: string[] = [];
-    const recommendations: string[] = [];
-
-    const deviceCount = this.devices.size;
-    const linkCount = this.links.size;
-    const hostCount = Array.from(this.devices.values()).filter(d => d.type === 'host').length;
-    const switchCount = Array.from(this.devices.values()).filter(d => d.type === 'switch').length;
-    const routerCount = Array.from(this.devices.values()).filter(d => d.type === 'router').length;
-
-    analysis.push(`Network contains: ${hostCount} hosts, ${switchCount} switches, ${routerCount} routers`);
-    analysis.push(`Total devices: ${deviceCount}, Total links: ${linkCount}`);
-    
-    // Analyze connectivity
-    const connectivityRatio = linkCount / Math.max(deviceCount - 1, 1);
-    if (connectivityRatio < 1) {
-      analysis.push('Network has minimal connectivity (tree topology)');
-      recommendations.push('Consider adding redundant links for fault tolerance');
-    } else if (connectivityRatio > 1.5) {
-      analysis.push('Network has high connectivity with redundant paths');
-      recommendations.push('Ensure spanning tree protocol is enabled on switches');
-    }
-
-    // Analyze segmentation
-    if (routerCount === 0 && hostCount > 3) {
-      analysis.push('Single broadcast domain - all hosts share collision/broadcast domain');
-      recommendations.push('Consider adding routers for network segmentation and better performance');
-    } else if (routerCount > 0) {
-      analysis.push(`Network is segmented into ${routerCount + 1} subnets`);
-      recommendations.push('Ensure proper routing configuration for inter-subnet communication');
-    }
-
-    return { analysis, recommendations };
   }
 }

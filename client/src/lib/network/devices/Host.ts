@@ -169,13 +169,30 @@ export class Host implements HostInterface {
       : 'nothing';
     console.log(`🏓 Host ${this.name}: Connected to: ${connectionInfo}`);
 
-    // Use proper routing logic - find next hop using routing table
-    const nextHop = this.findNextHop(dest);
-    if (!nextHop) {
-      throw new Error(`No route to destination ${destinationIP}. Check routing table and default gateway configuration.`);
+    // Check if destination is in same network
+    const sameNetwork = NetworkStack.isInSameNetwork(
+      sourceInterface.ipAddress.address,
+      destinationIP,
+      sourceInterface.ipAddress.subnet
+    );
+
+    console.log(`🏓 Host ${this.name}: Destination ${destinationIP} is ${sameNetwork ? 'on same network' : 'on different network'}`);
+
+    let nextHopIP: string;
+    if (sameNetwork) {
+      // Direct delivery - next hop is the destination itself
+      nextHopIP = destinationIP;
+      console.log(`🏓 Host ${this.name}: Direct delivery to ${destinationIP}`);
+    } else {
+      // Need routing via gateway
+      if (!this.defaultGateway) {
+        throw new Error(`Cannot reach ${destinationIP}: destination is on different network (${NetworkStack.calculateNetworkAddress(destinationIP, sourceInterface.ipAddress.subnet)}) but no default gateway configured. Configure a default gateway first.`);
+      }
+      nextHopIP = this.defaultGateway.address;
+      console.log(`🏓 Host ${this.name}: Routing via default gateway ${nextHopIP} to reach ${destinationIP}`);
     }
 
-    console.log(`🏓 Host ${this.name}: Next hop for ${destinationIP} is ${nextHop.address}`);
+    const nextHop: IPAddress = { address: nextHopIP, subnet: '' };
 
     // Add trace for routing decision
     const routeTrace: PacketTrace = {
@@ -187,16 +204,18 @@ export class Host implements HostInterface {
       outgoingInterface: sourceInterface.name,
       packet: {} as any,
       timestamp: performance.now(),
-      decision: `Routing decision: Next hop for ${destinationIP} is ${nextHop.address}`,
+      decision: sameNetwork 
+        ? `Same network delivery: ${destinationIP} is on local network ${NetworkStack.calculateNetworkAddress(sourceInterface.ipAddress.address, sourceInterface.ipAddress.subnet)}/${NetworkStack.getPrefixLength(sourceInterface.ipAddress.subnet)}`
+        : `Inter-network routing: ${destinationIP} is on different network, routing via gateway ${nextHopIP}`,
     };
     this.packetTracer.addTrace(routeTrace);
 
-    // Check ARP table for next hop MAC address
+    // Check ARP table for next hop MAC address (THIS IS CRITICAL - only ARP for next hop, not final destination)
     let targetMAC = this.findInARPTable(nextHop);
     
     if (!targetMAC) {
-      console.log(`🏓 Host ${this.name}: ARP resolution needed for ${nextHop.address}`);
-      // Need ARP resolution - this will automatically trace via sendARPRequest
+      console.log(`🏓 Host ${this.name}: ARP resolution needed for next hop ${nextHop.address}`);
+      // Need ARP resolution for the next hop only - this will automatically trace via sendARPRequest
       targetMAC = await this.sendARPRequest(nextHop, sourceInterface.name);
     }
 
@@ -204,7 +223,6 @@ export class Host implements HostInterface {
     const icmpPacket: ICMPPacket = {
       type: 8, // Echo Request
       code: 0,
-      checksum: 0,
       identifier: Math.floor(Math.random() * 65536),
       sequenceNumber: 1,
       data: 'Hello from ' + this.name,
@@ -213,8 +231,6 @@ export class Host implements HostInterface {
     // Create IP packet
     const ipPacket: IPPacket = {
       id: this.generatePacketId(),
-      version: 4,
-      totalLength: 64,
       timeToLive: 64,
       protocol: 1, // ICMP
       sourceIP: sourceInterface.ipAddress,
@@ -345,14 +361,25 @@ export class Host implements HostInterface {
       throw new Error(`Interface ${outgoingInterface} is not connected to any device`);
     }
 
+    // CRITICAL: Validate that target IP is on the same network segment
+    // ARP only works for devices on the same Layer 2 network
+    const sameNetwork = NetworkStack.isInSameNetwork(
+      sourceInterface.ipAddress.address,
+      targetIP.address,
+      sourceInterface.ipAddress.subnet
+    );
+
+    if (!sameNetwork) {
+      throw new Error(`ARP Error: Cannot send ARP request for ${targetIP.address} - not on same network segment. Source: ${sourceInterface.ipAddress.address}/${NetworkStack.getPrefixLength(sourceInterface.ipAddress.subnet)}, Target network: ${NetworkStack.calculateNetworkAddress(targetIP.address, sourceInterface.ipAddress.subnet)}/${NetworkStack.getPrefixLength(sourceInterface.ipAddress.subnet)}`);
+    }
+
+    console.log(`🔍 ARP: ${this.name} sending ARP request for ${targetIP.address} (same network segment verified)`);
+
     // Clear any existing ARP entry for this IP to avoid duplicates
     this.arpTable = this.arpTable.filter(e => e.ipAddress.address !== targetIP.address);
 
     const arpRequest: ARPPacket = {
-      hardwareType: 1, // Ethernet
       protocolType: 0x0800, // IPv4
-      hardwareSize: 6,
-      protocolSize: 4,
       operation: 1, // Request
       senderHardwareAddress: sourceInterface.macAddress,
       senderProtocolAddress: sourceInterface.ipAddress,
@@ -398,14 +425,16 @@ export class Host implements HostInterface {
         const targetInterface = targetDevice.interfaces.find(i => i.ipAddress?.address === targetIP.address);
         if (targetInterface) {
           targetMac = targetInterface.macAddress;
+          console.log(`🔍 ARP: Found target device ${targetDevice.name} with MAC ${targetInterface.macAddress.address}`);
         }
       }
     }
 
-    // Fallback to generating a MAC if we can't find the real device (simulation limitation)
+    // CRITICAL FIX: Do NOT generate fake MAC addresses for non-existent devices
+    // In real networking, ARP requests for non-existent devices simply timeout
     if (!targetMac) {
-      targetMac = this.generateMACAddress();
-      console.warn(`${this.name}: Could not find real MAC for ${targetIP.address}, using generated MAC`);
+      console.error(`🚫 ARP: No device found with IP ${targetIP.address} on this network segment`);
+      throw new Error(`ARP timeout: No response from ${targetIP.address}. Device may not exist, be powered off, or not connected to this network segment.`);
     }
 
     // Simulate small delay for ARP resolution
@@ -479,10 +508,7 @@ export class Host implements HostInterface {
         
         // Send ARP Reply
         const arpReply: ARPPacket = {
-          hardwareType: 1,
           protocolType: 0x0800,
-          hardwareSize: 6,
-          protocolSize: 4,
           operation: 2, // Reply
           senderHardwareAddress: ourInterface.macAddress,
           senderProtocolAddress: ourInterface.ipAddress!,
@@ -597,7 +623,6 @@ export class Host implements HostInterface {
       const echoReply: ICMPPacket = {
         type: 0, // Echo Reply
         code: 0,
-        checksum: 0,
         identifier: icmpPacket.identifier,
         sequenceNumber: icmpPacket.sequenceNumber,
         data: icmpPacket.data,
@@ -608,8 +633,6 @@ export class Host implements HostInterface {
 
       const replyPacket: IPPacket = {
         id: this.generatePacketId(),
-        version: 4,
-        totalLength: 64,
         timeToLive: 64,
         protocol: 1, // ICMP
         sourceIP: sourceInterface.ipAddress,

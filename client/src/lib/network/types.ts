@@ -32,8 +32,6 @@ export interface EthernetFrame {
 // OSI Layer 3 - IP Packet (Simplified)
 export interface IPPacket {
   id: string;
-  version: number; // 4 for IPv4
-  totalLength: number;
   timeToLive: number;
   protocol: number; // 1 for ICMP
   sourceIP: IPAddress;
@@ -46,7 +44,6 @@ export interface IPPacket {
 export interface ICMPPacket {
   type: number; // 8 for Echo Request, 0 for Echo Reply
   code: number;
-  checksum: number;
   identifier: number;
   sequenceNumber: number;
   data: string;
@@ -54,10 +51,7 @@ export interface ICMPPacket {
 
 // ARP Packet
 export interface ARPPacket {
-  hardwareType: number; // 1 for Ethernet
   protocolType: number; // 0x0800 for IPv4
-  hardwareSize: number; // 6 for MAC
-  protocolSize: number; // 4 for IPv4
   operation: number; // 1 for request, 2 for reply
   senderHardwareAddress: MACAddress;
   senderProtocolAddress: IPAddress;
@@ -153,10 +147,7 @@ export interface NetworkLink {
   interfaceA: string;
   deviceB: string;
   interfaceB: string;
-  bandwidth: number; // Mbps
-  latency: number; // ms
   isUp: boolean;
-  utilization: number; // percentage
 }
 
 // Network Topology
